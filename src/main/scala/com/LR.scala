@@ -31,15 +31,15 @@ object LR {
     val test = splits(1).cache()
 
     val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(data)
-    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub10")
-    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub10").clearThreshold()
+    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub11")
+    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub11").clearThreshold()
     val predictionAndLabel = testOnline
       .map({x=>
         val prediction = model2.predict(x._3).toFloat
         x._1+","+x._2+","+prediction
       })
       .repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub10")
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub11")
 //    val predictionAndLabel = test.map({case LabeledPoint(label,feature)=>
 //      val prediction = model.predict(feature)
 //      (prediction,label)
@@ -100,8 +100,8 @@ object LR {
       })
 
     /*统计专家回答率，问题被回答率*/
-    val userAnswerRate = invitedInfo.map(x=>(x._2,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
-    val questionAnsweredRate = invitedInfo.map(x=>(x._1,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
+    val userAnswerRate = invitedInfo.map(x=>(x._2,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2)).map(x=>(x._1,x._2._1*1.0/x._2._2)).collect().toMap
+    val questionAnsweredRate = invitedInfo.map(x=>(x._1,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2)).map(x=>(x._1,x._2._1*1.0/x._2._2)).collect().toMap
 
     /*提取原始特征（字、词、标签）*/
     val featureMap = invitedInfo
@@ -198,22 +198,24 @@ object LR {
       rawFeature(rawFeatureNum) = questionInfo._4
       rawFeature(rawFeatureNum+1) = questionInfo._5
       rawFeature(rawFeatureNum+2) = questionInfo._6
-      rawFeature(rawFeatureNum+3) = questionInfo._1.length
-      rawFeature(rawFeatureNum+4) = questionInfo._2.length
-      rawFeature(rawFeatureNum+5) = questionInfo._3.length
-      rawFeature(rawFeatureNum+6) = userInfo._1.length
-      rawFeature(rawFeatureNum+7) = userInfo._2.length
-      rawFeature(rawFeatureNum+8) = userInfo._3.length
-      rawFeature(rawFeatureNum+9) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._1
-      rawFeature(rawFeatureNum+10) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._2
-      if (rawFeature(rawFeatureNum+10)!=0){
-        rawFeature(rawFeatureNum+11) = rawFeature(rawFeatureNum+9) * 1.0 / rawFeature(rawFeatureNum+10)
-      }
-      rawFeature(rawFeatureNum+12) = userAnswerRate.getOrElse(user,Tuple2(0,0))._1
-      rawFeature(rawFeatureNum+13) = userAnswerRate.getOrElse(user,Tuple2(0,0))._2
-      if (rawFeature(rawFeatureNum+13)!=0){
-        rawFeature(rawFeatureNum+14) = rawFeature(rawFeatureNum+12) * 1.0 / rawFeature(rawFeatureNum+13)
-      }
+      rawFeature(rawFeatureNum+3) = questionAnsweredRate.getOrElse(question,0)
+      rawFeature(rawFeatureNum+4) = userAnswerRate.getOrElse(user,0)
+//      rawFeature(rawFeatureNum+3) = questionInfo._1.length
+//      rawFeature(rawFeatureNum+4) = questionInfo._2.length
+//      rawFeature(rawFeatureNum+5) = questionInfo._3.length
+//      rawFeature(rawFeatureNum+6) = userInfo._1.length
+//      rawFeature(rawFeatureNum+7) = userInfo._2.length
+//      rawFeature(rawFeatureNum+8) = userInfo._3.length
+//      rawFeature(rawFeatureNum+9) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._1
+//      rawFeature(rawFeatureNum+10) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._2
+//      if (rawFeature(rawFeatureNum+10)!=0){
+//        rawFeature(rawFeatureNum+11) = rawFeature(rawFeatureNum+9) * 1.0 / rawFeature(rawFeatureNum+10)
+//      }
+//      rawFeature(rawFeatureNum+12) = userAnswerRate.getOrElse(user,Tuple2(0,0))._1
+//      rawFeature(rawFeatureNum+13) = userAnswerRate.getOrElse(user,Tuple2(0,0))._2
+//      if (rawFeature(rawFeatureNum+13)!=0){
+//        rawFeature(rawFeatureNum+14) = rawFeature(rawFeatureNum+12) * 1.0 / rawFeature(rawFeatureNum+13)
+//      }
       var index = 0
       for (i <- gbdtFeatureInd.indices){
         val featureInd = gbdtFeatureInd(i)
@@ -221,7 +223,7 @@ object LR {
         gbdtFeature(index+ind) = 1
         index = gbdtFeatureMap(i).size
       }
-      (question,user,Vectors.dense(rawFeature++gbdtFeature))
+      (question,user,Vectors.dense(rawFeature))
     }).cache()
 
     /*提取有label的专家-问题记录的特征*/
@@ -247,22 +249,24 @@ object LR {
       rawFeature(rawFeatureNum) = questionInfo._4
       rawFeature(rawFeatureNum+1) = questionInfo._5
       rawFeature(rawFeatureNum+2) = questionInfo._6
-      rawFeature(rawFeatureNum+3) = questionInfo._1.length
-      rawFeature(rawFeatureNum+4) = questionInfo._2.length
-      rawFeature(rawFeatureNum+5) = questionInfo._3.length
-      rawFeature(rawFeatureNum+6) = userInfo._1.length
-      rawFeature(rawFeatureNum+7) = userInfo._2.length
-      rawFeature(rawFeatureNum+8) = userInfo._3.length
-      rawFeature(rawFeatureNum+9) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._1
-      rawFeature(rawFeatureNum+10) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._2
-      if (rawFeature(rawFeatureNum+10)!=0){
-        rawFeature(rawFeatureNum+11) = rawFeature(rawFeatureNum+9) * 1.0 / rawFeature(rawFeatureNum+10)
-      }
-      rawFeature(rawFeatureNum+12) = userAnswerRate.getOrElse(user,Tuple2(0,0))._1
-      rawFeature(rawFeatureNum+13) = userAnswerRate.getOrElse(user,Tuple2(0,0))._2
-      if (rawFeature(rawFeatureNum+13)!=0){
-        rawFeature(rawFeatureNum+14) = rawFeature(rawFeatureNum+12) * 1.0 / rawFeature(rawFeatureNum+13)
-      }
+      rawFeature(rawFeatureNum+3) = questionAnsweredRate.getOrElse(question,0)
+      rawFeature(rawFeatureNum+4) = userAnswerRate.getOrElse(user,0)
+//      rawFeature(rawFeatureNum+3) = questionInfo._1.length
+//      rawFeature(rawFeatureNum+4) = questionInfo._2.length
+//      rawFeature(rawFeatureNum+5) = questionInfo._3.length
+//      rawFeature(rawFeatureNum+6) = userInfo._1.length
+//      rawFeature(rawFeatureNum+7) = userInfo._2.length
+//      rawFeature(rawFeatureNum+8) = userInfo._3.length
+//      rawFeature(rawFeatureNum+9) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._1
+//      rawFeature(rawFeatureNum+10) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._2
+//      if (rawFeature(rawFeatureNum+10)!=0){
+//        rawFeature(rawFeatureNum+11) = rawFeature(rawFeatureNum+9) * 1.0 / rawFeature(rawFeatureNum+10)
+//      }
+//      rawFeature(rawFeatureNum+12) = userAnswerRate.getOrElse(user,Tuple2(0,0))._1
+//      rawFeature(rawFeatureNum+13) = userAnswerRate.getOrElse(user,Tuple2(0,0))._2
+//      if (rawFeature(rawFeatureNum+13)!=0){
+//        rawFeature(rawFeatureNum+14) = rawFeature(rawFeatureNum+12) * 1.0 / rawFeature(rawFeatureNum+13)
+//      }
       var index = 0
       for (i <- gbdtFeatureInd.indices){
         val featureInd = gbdtFeatureInd(i)
@@ -270,9 +274,9 @@ object LR {
         gbdtFeature(index+ind) = 1
         index = gbdtFeatureMap(i).size
       }
-      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawFeature++gbdtFeature)))
+      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawFeature)))
     }).cache()
-    (rawFeatureNum+15,gbdtFeatureNum,data,testOnline)
+    (rawFeatureNum+5,gbdtFeatureNum,data,testOnline)
   }
 
   def evaluate(sc:SparkContext): Unit ={
