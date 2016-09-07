@@ -7,8 +7,8 @@ import java.io.*;
  */
 public class textCombine {
     public static void main(String[] args){
-        File file1 = new File("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\invited_info_train.txt");
-        File file2 = new File("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\leaf_train_1000.txt");
+        File file1 = new File("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\gbdt\\invited_info_train.txt");
+        File file2 = new File("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\gbdt\\leaf_train_1000.txt");
         File out = new File("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\label.txt");
         BufferedReader reader1 = null;
         BufferedReader reader2 = null;
