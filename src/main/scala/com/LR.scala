@@ -18,6 +18,15 @@ object LR {
     val conf = new SparkConf().setAppName("LR").setMaster("local[4]")
     val sc = new SparkContext(conf)
 
+//    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\result.csv").map({x=>
+//      val info = x.split(",")
+//      val qid = info(0)
+//      val uid = info(1)
+//      val pre = info(2).toDouble
+//      val label = info(3).toInt
+//      (qid,uid,pre,label)
+//    }).sortBy(x=>(x._1,x._3)).map(x=>x._1+"\t"+x._2+"\t"+x._3+"\t"+x._4).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\haha")
+
 //    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub6")
 //    val weights = model.weights.toArray.zipWithIndex.sortBy(x=>x._1)
 //    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel6.txt")
@@ -26,32 +35,63 @@ object LR {
 //      out.write(index+"\t"+weight+"\n")
 //    }
 //    out.close()
-    val (rawFeatureNum,gbdtFeatureNum,data,testOnline) = dataProcessing(sc)
-    train(data,testOnline)
+    //val (rawFeatureNum,gbdtFeatureNum,data,testOnline) = dataProcessing(sc)
+    train(sc)
     //evaluate(sc)
     //featurePrint(rawFeatureNum,data,testOnline)
 
     sc.stop()
   }
 
-  def train(parsedData:RDD[(String,String,LabeledPoint)],testOnline:RDD[(String,String,Vector)]): Unit ={
-    val sc = parsedData.sparkContext
-    val data = parsedData.map(_._3).cache()
-    val testPred = testOnline.cache()
+  def train(sc:SparkContext): Unit ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\train\\train.txt").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value)
+    })
+    val featureNum = data.flatMap(x=>x._2).max()+1
+    val training = data.map(x=>LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3))).cache()
+
+    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\test\\test.txt").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val feature = info(2).split(" ")
+      val indices = new Array[Int](feature.length)
+      val value = new Array[Double](feature.length)
+      for (i<-0 until feature.length){
+        val indAndVal = feature(i).split(":")
+        indices(i) = indAndVal(0).toInt-1
+        value(i) = indAndVal(1).toDouble
+      }
+      (question,user,Vectors.sparse(featureNum,indices,value))
+    }).cache()
+//    val data = parsedData.map(_._3).cache()
+//    val testPred = testOnline.cache()
     //val splits = data.randomSplit(Array(0.5,0.5),seed = 11L)
     //val training = splits(0).cache()
     //val test = splits(1).cache()
 
-    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(data)
-    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub2_2")
-    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub2_2").clearThreshold()
-    val predictionAndLabel = testPred
+    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training)
+    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub12")
+    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub12").clearThreshold()
+    val predictionAndLabel = test
       .map({x=>
         val prediction = model2.predict(x._3).toFloat
         x._1+","+x._2+","+prediction
       })
       .repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub2_2")
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub12")
 //    val predictionAndLabel = test.map({case LabeledPoint(label,feature)=>
 //      val prediction = model.predict(feature)
 //      (prediction,label)
@@ -59,7 +99,7 @@ object LR {
 //    predictionAndLabel.map(x=>x._1+"\t"+x._2).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.5_df7Rate")
   }
 
-  def dataProcessing(sc:SparkContext): (Int,Int,RDD[(String,String,LabeledPoint)],RDD[(String,String,Vector)]) ={
+  def dataProcessing(sc:SparkContext):Unit = {
     val userInfo = sc
       .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\user_info.txt")
       .map({x=>
@@ -127,7 +167,7 @@ object LR {
       .map(x=>(x,1))
       .reduceByKey(_+_)
       .sortBy(x=>x._2)
-      .filter(_._2 > 5)
+      .filter(_._2 > 7)
       .map(_._1)
       .zipWithIndex()
       .map(x=>(x._1,x._2.toInt))
@@ -209,7 +249,28 @@ object LR {
       (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawFeature++gbdtFeature)))
     })
     //println(rawFeatureNum+5+" "+ gbdtFeatureNum)
-    (rawFeatureNum+5,gbdtFeatureNum,data,testOnline)
+
+    data.map(x=>{
+      val qid = x._1
+      val uid = x._2
+      val label = x._3.label
+      val feature = x._3.features.toSparse
+      val indices = feature.indices.map(x=>x+1)
+      val value = feature.values
+      val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
+      qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
+    }).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\train")
+    testOnline.map(x=>{
+      val qid = x._1
+      val uid = x._2
+      val feature = x._3.toSparse
+      val indices = feature.indices.map(x=>x+1)
+      val value = feature.values
+      val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
+      qid+"\t"+uid+"\t"+feature2.mkString(" ")
+    }).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\test")
+
+//    (rawFeatureNum+5,gbdtFeatureNum,data,testOnline)
   }
 
   def getRawFeature(question:String,
