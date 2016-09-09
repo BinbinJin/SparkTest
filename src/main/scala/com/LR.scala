@@ -18,15 +18,6 @@ object LR {
     val conf = new SparkConf().setAppName("LR").setMaster("local[4]")
     val sc = new SparkContext(conf)
 
-//    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\result.csv").map({x=>
-//      val info = x.split(",")
-//      val qid = info(0)
-//      val uid = info(1)
-//      val pre = info(2).toDouble
-//      val label = info(3).toInt
-//      (qid,uid,pre,label)
-//    }).sortBy(x=>(x._1,x._3)).map(x=>x._1+"\t"+x._2+"\t"+x._3+"\t"+x._4).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\haha")
-
 //    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub16")
 //    val weights = model.weights.toArray.zipWithIndex.sortBy(x=>x._1)
 //    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel16.txt")
@@ -44,7 +35,7 @@ object LR {
   }
 
   def train(sc:SparkContext): Unit ={
-    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_raw\\train\\part-*").map({x=>
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_rawQ_rawU\\train\\part-*").map({x=>
       val info = x.split("\t")
       val question = info(0)
       val user = info(1)
@@ -62,7 +53,7 @@ object LR {
     val featureNum = data.flatMap(x=>x._2).max()+1
     val training = data.map(x=>LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3))).cache()
 
-    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_raw\\test\\part-*").map({x=>
+    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_rawQ_rawU\\test\\part-*").map({x=>
       val info = x.split("\t")
       val question = info(0)
       val user = info(1)
@@ -83,15 +74,15 @@ object LR {
     //val test = splits(1).cache()
 
     val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training)
-    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub18")
-    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub18").clearThreshold()
+    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub19")
+    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub19").clearThreshold()
     val predictionAndLabel = test
       .map({x=>
         val prediction = model2.predict(x._3).toFloat
         x._1+","+x._2+","+prediction
       })
       .repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub18")
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub19")
 //    val predictionAndLabel = test.map({case LabeledPoint(label,feature)=>
 //      val prediction = model.predict(feature)
 //      (prediction,label)
@@ -233,9 +224,10 @@ object LR {
       val question = info(0)
       val user = info(1)
       val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
-      val rawFeature = getRawFeature(question,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,Vectors.dense(rawFeature))
+      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature))
     })
 
     /*提取有label的专家-问题记录的特征*/
@@ -244,9 +236,10 @@ object LR {
       val user = x._2
       val label = x._3
       val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
-      val rawFeature = getRawFeature(question,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawFeature)))
+      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature)))
     })
 
     data.map(x=>{
@@ -258,7 +251,7 @@ object LR {
       val value = feature.values
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
       qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_raw\\train")
+    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_rawQ_rawU\\train")
     testOnline.map(x=>{
       val qid = x._1
       val uid = x._2
@@ -267,9 +260,62 @@ object LR {
       val value = feature.values
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
       qid+"\t"+uid+"\t"+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_raw\\test")
-    println(rawFeatureNum+15+" "+ gbdtFeatureNum)
+    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_rawQ_rawU\\test")
+
 //    (rawFeatureNum+5,gbdtFeatureNum,data,testOnline)
+  }
+
+  def getRawFeature2(question:String,
+                    user:String,
+                    questionInfoMap:Map[String,(Array[Int],Array[Int],Array[Int],Int,Int,Int)],
+                    questionAnsweredRate:Map[String,(Int,Int)],
+                    userInfoMap:Map[String,(Array[Int],Array[Int],Array[Int])],
+                    userAnswerRate:Map[String,(Int,Int)],
+                    featureMap:Map[Int,Int],
+                    rawFeatureNum:Int): Array[Double] ={
+    val rawFeature = new Array[Double](rawFeatureNum)
+    val questionInfo = questionInfoMap.getOrElse(question,null)
+    val userInfo = userInfoMap.getOrElse(user,null)
+    val tags = if (user==null){
+      questionInfo._1++questionInfo._2++questionInfo._3
+    }else{
+      userInfo._1++userInfo._2++userInfo._3
+    }
+    for (tag<-tags){
+      val ind = featureMap.getOrElse(tag,-1)
+      if (ind != -1) {
+        rawFeature(ind) = rawFeature(ind) + 1
+      }
+    }
+    val specialQuestion = new Array[Double](9)
+    val specialUser = new Array[Double](6)
+    if (user == null) {
+      specialQuestion(0) = questionInfo._4
+      specialQuestion(1) = questionInfo._5
+      specialQuestion(2) = questionInfo._6
+      specialQuestion(3) = questionInfo._1.length
+      specialQuestion(4) = questionInfo._2.length
+      specialQuestion(5) = questionInfo._3.length
+      specialQuestion(6) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._1
+      specialQuestion(7) = questionAnsweredRate.getOrElse(question,Tuple2(0,0))._2
+      if (specialQuestion(7)!=0){
+        specialQuestion(8) = specialQuestion(6) * 1.0 / specialQuestion(7)
+      }
+    }else {
+      specialUser(0) = userInfo._1.length
+      specialUser(1) = userInfo._2.length
+      specialUser(2) = userInfo._3.length
+      specialUser(3) = userAnswerRate.getOrElse(user, Tuple2(0, 0))._1
+      specialUser(4) = userAnswerRate.getOrElse(user, Tuple2(0, 0))._2
+      if (specialUser(4) != 0) {
+        specialUser(5) = specialUser(3) * 1.0 / specialUser(4)
+      }
+    }
+    if (user==null){
+      rawFeature++specialQuestion
+    }else{
+      rawFeature++specialUser
+    }
   }
 
   def getRawFeature(question:String,
