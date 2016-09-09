@@ -36,9 +36,9 @@ object LR {
 //    }
 //    out.close()
     //dataProcessing(sc)
-    train(sc)
+    //train(sc)
     //evaluate(sc)
-    //featurePrint(rawFeatureNum,data,testOnline)
+    statistic(sc)
 
     sc.stop()
   }
@@ -166,7 +166,7 @@ object LR {
       })
       .map(x=>(x,1))
       .reduceByKey(_+_)
-      .sortBy(x=>x._2)
+      //.sortBy(x=>x._2)
       .filter(_._2 > 0)
       .map(_._1)
       .zipWithIndex()
@@ -347,40 +347,24 @@ object LR {
     println(precision+" "+recall+" "+correct)
   }
 
-  def featurePrint(featureNum:Int,
-                   data:RDD[(String,String,LabeledPoint)],
-                   testOnline:RDD[(String,String,Vector)]): Unit ={
-    data.map({x=>
-      val res = new Array[String](featureNum)
-      val question = x._1
-      val user = x._2
-      val feature = x._3.features.toArray
-      var k = 0
-      for (i<-0 until featureNum){
-        if (feature(i)>0){
-          res(k) = (i+1)+":"+feature(i)
-          k = k + 1
-        }
+  def statistic(sc:SparkContext): Unit ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_raw\\train\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
       }
-      val res2 = res.filter(_!=null)
-      question+"\t"+user+"\t"+x._3.label.toInt+" "+res2.mkString(" ")
-    }).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data2Vector4")
+      (label,indices,value,indices.zip(value))
+    })
+    val sta = data.flatMap(x=>x._4).filter(x=>x._2>10).map(x=>(x._1,1)).reduceByKey(_+_).sortBy(x=>x._1).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\haha3")
 
-    testOnline.map({x=>
-      val res = new Array[String](featureNum)
-      val question = x._1
-      val user = x._2
-      val feature = x._3.toArray
-      var k = 0
-      for (i<-0 until featureNum){
-        if (feature(i)>0){
-          res(k) = (i+1)+":"+feature(i)
-          k = k + 1
-        }
-      }
-      val res2 = res.filter(_!=null)
-      question+"\t"+user+"\t"+" "+res2.mkString(" ")
-    }).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data2VectorTest4")
 
   }
 }
