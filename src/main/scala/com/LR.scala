@@ -18,9 +18,9 @@ object LR {
     val conf = new SparkConf().setAppName("LR").setMaster("local[4]")
     val sc = new SparkContext(conf)
 
-    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub20")
+    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub23")
     val weights = model.weights.toArray.zipWithIndex.sortBy(x=>x._1)
-    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel20.txt")
+    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel23.txt")
     out.println(model.numFeatures)
     for ((weight,index)<-weights){
       out.write(index+"\t"+weight+"\n")
@@ -32,8 +32,9 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    //ataProcessing(sc,0,"15_compress_rawQ_rawU")
-//    train(sc,"15_compress_rawQ_rawU",20)
+    val dataName = "15_compress_rawQ_rawU_df5_3rel"
+    //dataProcessing(sc,5,dataName)
+    //train(sc,dataName,23)
     //evaluate(sc)
     //statistic(sc)
 
@@ -158,7 +159,7 @@ object LR {
         val label = info(2).toInt
         val gbdtFeature = info(3)
         (question,user,label,gbdtFeature)
-      })
+      }).cache()
 
     /*统计专家回答率，问题被回答率*/
     val userAnswerRate = invitedInfo.map(x=>(x._2,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
@@ -241,11 +242,17 @@ object LR {
       val info = sp(0).split(",")
       val question = info(0)
       val user = info(1)
+      val questionInfo = questionInfoMap.getOrElse(question,null)
+      val userInfo = userInfoMap.getOrElse(user,null)
+      val rel = new Array[Double](3)
+      rel(0) = questionInfo._1.intersect(userInfo._1).length
+      rel(1) = questionInfo._2.intersect(userInfo._2).length
+      rel(2) = questionInfo._3.intersect(userInfo._3).length
       val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
-      val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature))
+      //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
+      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel))
     })
 
     /*提取有label的专家-问题记录的特征*/
@@ -253,11 +260,17 @@ object LR {
       val question = x._1
       val user = x._2
       val label = x._3
+      val questionInfo = questionInfoMap.getOrElse(question,null)
+      val userInfo = userInfoMap.getOrElse(user,null)
+      val rel = new Array[Double](3)
+      rel(0) = questionInfo._1.intersect(userInfo._1).length
+      rel(1) = questionInfo._2.intersect(userInfo._2).length
+      rel(2) = questionInfo._3.intersect(userInfo._3).length
       val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
-      val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature)))
+      //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
+      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel)))
     })
 
     data.map(x=>{
@@ -279,6 +292,7 @@ object LR {
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
       qid+"\t"+uid+"\t"+feature2.mkString(" ")
     }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+outputName+"\\test")
+    //println(rawFeatureNum)
   }
 
   def getRawFeature2(question:String,
