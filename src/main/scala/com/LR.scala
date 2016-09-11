@@ -8,6 +8,7 @@ import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
 /**
@@ -18,23 +19,23 @@ object LR {
     val conf = new SparkConf().setAppName("LR").setMaster("local[4]")
     val sc = new SparkContext(conf)
 
-    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub23")
-    val weights = model.weights.toArray.zipWithIndex.sortBy(x=>x._1)
-    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel23.txt")
-    out.println(model.numFeatures)
-    for ((weight,index)<-weights){
-      out.write(index+"\t"+weight+"\n")
-    }
-    out.close()
+//    val model = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub23")
+//    val weights = model.weights.toArray.zipWithIndex.sortBy(x=>x._1)
+//    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\weightModel23.txt")
+//    out.println(model.numFeatures)
+//    for ((weight,index)<-weights){
+//      out.write(index+"\t"+weight+"\n")
+//    }
+//    out.close()
 
 //    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\15_rawQ_rawU\\train\\part-*")
 //    val splits = data.randomSplit(Array(0.2,0.8),seed = 11L)
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_compress_rawQ_rawU_df5_3rel"
+    val dataName = "15_compress_rawQ_rawU_df5_5rel"
     //dataProcessing(sc,5,dataName)
-    //train(sc,dataName,23)
+    train(sc,dataName,25)
     //evaluate(sc)
     //statistic(sc)
 
@@ -134,6 +135,37 @@ object LR {
         val goodAnswer = info(6).toInt
         (question,(tags,term,word,support,answer,goodAnswer))
       })
+
+    val userLabelTag = userInfo.map({x=>
+      x._2._1
+    }).collect()
+    val listRes = ListBuffer.empty[Set[Int]]
+    userLabelTag.foreach({ x =>
+      val set = x.toSet
+      val newSet = new scala.collection.mutable.HashSet[Int]()
+      val listTmp = listRes.toList
+      listRes.clear()
+      for (s<-listTmp){
+        if (s.intersect(set).nonEmpty){
+          newSet ++= s
+        }else{
+          listRes += s
+        }
+      }
+      newSet ++= set
+      listRes += newSet.toSet
+    })
+    var maxLabel = 0
+    for (set<-listRes){
+      if (set.max>maxLabel)
+        maxLabel = set.max
+    }
+    val labelToClass = Array.fill[Int](maxLabel+1)(-1)
+    for (i<-listRes.indices){
+      for (label<-listRes(i)){
+        labelToClass(label) = i+1
+      }
+    }
 
     val userInfoMap = userInfo.collect().toMap
     val (supportCB,answerCB,goodAnswerCB) = getCutBorder(questionInfo)
@@ -244,10 +276,14 @@ object LR {
       val user = info(1)
       val questionInfo = questionInfoMap.getOrElse(question,null)
       val userInfo = userInfoMap.getOrElse(user,null)
-      val rel = new Array[Double](3)
+      val rel = new Array[Double](5)
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
+      rel(3) = labelToClass(userInfo._1(0))
+      if (questionInfo._1.length>0) {
+        rel(4) = labelToClass(questionInfo._1(0))
+      }
       val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
@@ -262,10 +298,14 @@ object LR {
       val label = x._3
       val questionInfo = questionInfoMap.getOrElse(question,null)
       val userInfo = userInfoMap.getOrElse(user,null)
-      val rel = new Array[Double](3)
+      val rel = new Array[Double](5)
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
+      rel(3) = labelToClass(userInfo._1(0))
+      if (questionInfo._1.length>0) {
+        rel(4) = labelToClass(questionInfo._1(0))
+      }
       val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
