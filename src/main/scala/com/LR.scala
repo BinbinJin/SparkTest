@@ -2,12 +2,14 @@ package com
 
 import java.io.PrintWriter
 
+import org.apache.hadoop.util.hash.Hash
 import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS, LogisticRegressionWithSGD}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
@@ -33,7 +35,7 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_compress_rawQ_rawU_df5_5rel"
+    val dataName = "15_compress_rawQ_rawU_df5_5rel_userPre"
     //dataProcessing(sc,5,dataName)
     train(sc,dataName,25)
     //evaluate(sc)
@@ -136,36 +138,37 @@ object LR {
         (question,(tags,term,word,support,answer,goodAnswer))
       })
 
-    val userLabelTag = userInfo.map({x=>
-      x._2._1
-    }).collect()
-    val listRes = ListBuffer.empty[Set[Int]]
-    userLabelTag.foreach({ x =>
-      val set = x.toSet
-      val newSet = new scala.collection.mutable.HashSet[Int]()
-      val listTmp = listRes.toList
-      listRes.clear()
-      for (s<-listTmp){
-        if (s.intersect(set).nonEmpty){
-          newSet ++= s
-        }else{
-          listRes += s
-        }
-      }
-      newSet ++= set
-      listRes += newSet.toSet
-    })
-    var maxLabel = 0
-    for (set<-listRes){
-      if (set.max>maxLabel)
-        maxLabel = set.max
-    }
-    val labelToClass = Array.fill[Int](maxLabel+1)(-1)
-    for (i<-listRes.indices){
-      for (label<-listRes(i)){
-        labelToClass(label) = i+1
-      }
-    }
+    /*对专家标间进行简单分类*/
+//    val userLabelTag = userInfo.map({x=>
+//      x._2._1
+//    }).collect()
+//    val listRes = ListBuffer.empty[Set[Int]]
+//    userLabelTag.foreach({ x =>
+//      val set = x.toSet
+//      val newSet = new scala.collection.mutable.HashSet[Int]()
+//      val listTmp = listRes.toList
+//      listRes.clear()
+//      for (s<-listTmp){
+//        if (s.intersect(set).nonEmpty){
+//          newSet ++= s
+//        }else{
+//          listRes += s
+//        }
+//      }
+//      newSet ++= set
+//      listRes += newSet.toSet
+//    })
+//    var maxLabel = 0
+//    for (set<-listRes){
+//      if (set.max>maxLabel)
+//        maxLabel = set.max
+//    }
+//    val labelToClass = Array.fill[Int](maxLabel+1)(-1)
+//    for (i<-listRes.indices){
+//      for (label<-listRes(i)){
+//        labelToClass(label) = i+1
+//      }
+//    }
 
     val userInfoMap = userInfo.collect().toMap
     val (supportCB,answerCB,goodAnswerCB) = getCutBorder(questionInfo)
@@ -196,6 +199,26 @@ object LR {
     /*统计专家回答率，问题被回答率*/
     val userAnswerRate = invitedInfo.map(x=>(x._2,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
     val questionAnsweredRate = invitedInfo.map(x=>(x._1,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
+
+    /*统计用户回答问题的热门程度*/
+    val userPreferMap = new mutable.HashMap[String,(Array[Double],Array[Double],Array[Double],Array[Double])]()
+    val userPrefer = invitedInfo.filter(_._3==1).map({x=>
+      val question = x._1
+      val user = x._2
+      val questionInfo = questionInfoMap.getOrElse(question,null)
+      (user,(questionInfo._4,questionInfo._5,questionInfo._6,questionInfo._1(0)))
+    }).collect()
+    for ((user,(supprot,answer,goodAnswer,qlabel))<-userPrefer){
+      val info = userPreferMap.getOrElse(user,Tuple4(new Array[Double](10),new Array[Double](10),new Array[Double](10),new Array[Double](20)))
+      info._1(supprot) = info._1(supprot) + 1
+      info._2(answer) = info._2(answer) + 1
+      info._3(goodAnswer) = info._3(answer) + 1
+      info._4(qlabel) = info._4(qlabel) + 1
+      userPreferMap.put(user,info)
+    }
+
+    /*统计用户回答不同标签问题的数量*/
+
 
     /*提取原始特征（字、词、标签）*/
     val featureMap = invitedInfo
@@ -236,7 +259,7 @@ object LR {
       gbdtFeatureNum = gbdtFeatureNum + map.size
     }
 
-//    /*计算所有专家和问题记录（包括有label和没label的数据）的IDF*/
+      /*计算所有专家和问题记录（包括有label和没label的数据）的IDF*/
 //    val testQAU = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\nolabel.txt").map({x=>
 //      val sp = x.split("\t")
 //      val info = sp(0).split(",")
@@ -276,19 +299,16 @@ object LR {
       val user = info(1)
       val questionInfo = questionInfoMap.getOrElse(question,null)
       val userInfo = userInfoMap.getOrElse(user,null)
-      val rel = new Array[Double](5)
+      val rel = new Array[Double](3)
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
-      rel(3) = labelToClass(userInfo._1(0))
-      if (questionInfo._1.length>0) {
-        rel(4) = labelToClass(questionInfo._1(0))
-      }
-      val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
+      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
+      //val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel))
+      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4))
     })
 
     /*提取有label的专家-问题记录的特征*/
@@ -298,19 +318,16 @@ object LR {
       val label = x._3
       val questionInfo = questionInfoMap.getOrElse(question,null)
       val userInfo = userInfoMap.getOrElse(user,null)
-      val rel = new Array[Double](5)
+      val rel = new Array[Double](3)
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
-      rel(3) = labelToClass(userInfo._1(0))
-      if (questionInfo._1.length>0) {
-        rel(4) = labelToClass(questionInfo._1(0))
-      }
-      val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
+      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
+      //val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel)))
+      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4)))
     })
 
     data.map(x=>{
