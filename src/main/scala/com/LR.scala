@@ -3,7 +3,7 @@ package com
 import java.io.PrintWriter
 
 import org.apache.hadoop.util.hash.Hash
-import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS, LogisticRegressionWithSGD}
+import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS, LogisticRegressionWithSGD, SVMWithSGD}
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
@@ -35,13 +35,60 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_compress_rawQ_rawU_df5_5rel_userPre"
-    //dataProcessing(sc,5,dataName)
-    train(sc,dataName,25)
+    val dataName = "15_compress_rawQ_rawU_df7_3rel_userPre50+143"
+    dataProcessing(sc,5,dataName)
+    //train(sc,dataName,31)
+    //SVMTrain(sc,dataName,27)
     //evaluate(sc)
     //statistic(sc)
 
     sc.stop()
+  }
+
+  def SVMTrain(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value)
+    })
+    val featureNum = data.flatMap(x=>x._2).max()+1
+    val training = data.map(x=>LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3))).cache()
+
+    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\test\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val feature = info(2).split(" ")
+      val indices = new Array[Int](feature.length)
+      val value = new Array[Double](feature.length)
+      for (i<-0 until feature.length){
+        val indAndVal = feature(i).split(":")
+        indices(i) = indAndVal(0).toInt-1
+        value(i) = indAndVal(1).toDouble
+      }
+      (question,user,Vectors.sparse(featureNum,indices,value))
+    }).cache()
+
+    val numIterations = 1000
+    val model = SVMWithSGD.train(training, numIterations)
+    model.clearThreshold()
+
+    // Compute raw scores on the test set.
+    val scoreAndLabels = test.map { x =>
+      val score = model.predict(x._3)
+      x._1+","+x._2+","+score
+    }.repartition(1)
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub"+modelNum)
   }
 
   def train(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
@@ -200,7 +247,7 @@ object LR {
     val userAnswerRate = invitedInfo.map(x=>(x._2,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
     val questionAnsweredRate = invitedInfo.map(x=>(x._1,(x._3,1))).reduceByKey((x,y)=>(x._1+y._1,x._2+y._2))/*.map(x=>(x._1,x._2._1*1.0/x._2._2))*/.collect().toMap
 
-    /*统计用户回答问题的热门程度*/
+    /*统计用户回答问题的热门程度,用户回答不同标签问题的数量*/
     val userPreferMap = new mutable.HashMap[String,(Array[Double],Array[Double],Array[Double],Array[Double])]()
     val userPrefer = invitedInfo.filter(_._3==1).map({x=>
       val question = x._1
@@ -217,7 +264,21 @@ object LR {
       userPreferMap.put(user,info)
     }
 
-    /*统计用户回答不同标签问题的数量*/
+    /*统计问题被回答的专家的标签*/
+    val questionPreferedMap = new mutable.HashMap[String,(Array[Double])]()
+    val questionPrefer = invitedInfo.filter(_._3==1).map{x=>
+      val question = x._1
+      val user = x._2
+      val userInfo = userInfoMap.getOrElse(user,null)
+      (question,userInfo._1)
+    }.collect()
+    for ((question,userid)<-questionPrefer){
+      val info = questionPreferedMap.getOrElse(question,new Array[Double](143))
+      for (label<-userid){
+        info(label) = info(label) + 1
+      }
+      questionPreferedMap.put(question,info)
+    }
 
 
     /*提取原始特征（字、词、标签）*/
@@ -304,11 +365,12 @@ object LR {
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
       val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
+      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](0))
       //val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4))
+      (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2))
     })
 
     /*提取有label的专家-问题记录的特征*/
@@ -323,11 +385,12 @@ object LR {
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
       val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
+      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](0))
       //val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
       val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
-      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4)))
+      (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2)))
     })
 
     data.map(x=>{
