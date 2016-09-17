@@ -60,7 +60,7 @@ object RF {
     val numTrees = 200 // Use more in practice.
     val featureSubsetStrategy = "auto" // Let the algorithm choose.
     val impurity = "variance"
-    val maxDepth = 4
+    val maxDepth = 5
     val maxBins = 32
 
     val model = RandomForest.trainRegressor(trainingData, categoricalFeaturesInfo,
@@ -71,7 +71,7 @@ object RF {
       val prediction = model.predict(point.features)
       (point.label, prediction)
     }
-    labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_4")
+    labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5")
     val testMSE = labelsAndPredictions.map{ case(v, p) => math.pow((v - p), 2)}.mean()
     println("Test Mean Squared Error = " + testMSE)
 
