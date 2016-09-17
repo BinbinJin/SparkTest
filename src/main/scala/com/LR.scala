@@ -35,9 +35,9 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_compress_rawQ_rawU_df7_3rel_userPre50+143"
-    dataProcessing(sc,5,dataName)
-    //train(sc,dataName,31)
+    val dataName = "15_raw+compress_rawQ_rawU_df5_3rel_userPre50+143_non0"
+    //dataProcessing(sc,5,dataName)
+    train(sc,dataName,34)
     //SVMTrain(sc,dataName,27)
     //evaluate(sc)
     //statistic(sc)
@@ -229,7 +229,7 @@ object LR {
       while (answer>answerCB(k2)._2) k2 = k2 + 1
       var k3 = 0
       while (goodAnswer>goodAnswerCB(k3)._2) k3 = k3 + 1
-      (x._1,(x._2._1,x._2._2,x._2._3,k1,k2,k3))
+      (x._1,(x._2._1,x._2._2,x._2._3,k1,k2,k3,Array[Double](support,answer,goodAnswer)))
     }).collect().toMap
 
     val invitedInfo = sc
@@ -282,13 +282,25 @@ object LR {
 
 
     /*提取原始特征（字、词、标签）*/
-    val featureMap = invitedInfo
+    val questionFeatureMap = invitedInfo
       .flatMap({x=>
         val question = x._1
-        val user = x._2
         val questionInfo = questionInfoMap.getOrElse(question,null)
+        (questionInfo._1++questionInfo._2++questionInfo._3).distinct
+      })
+      .map(x=>(x,1))
+      .reduceByKey(_+_)
+      .filter(_._2 > minCount)
+      .map(_._1)
+      .zipWithIndex()
+      .map(x=>(x._1,x._2.toInt))
+      .collect()
+      .toMap
+    val userFeatureMap = invitedInfo
+      .flatMap({x=>
+        val user = x._2
         val userInfo = userInfoMap.getOrElse(user,null)
-        (questionInfo._1++questionInfo._2++questionInfo._3++userInfo._1++userInfo._2++userInfo._3).distinct
+        (userInfo._1++userInfo._2++userInfo._3).distinct
       })
       .map(x=>(x,1))
       .reduceByKey(_+_)
@@ -299,26 +311,27 @@ object LR {
       .map(x=>(x._1,x._2.toInt))
       .collect()
       .toMap
-    val rawFeatureNum = featureMap.size
+    val questionFeatureNum = questionFeatureMap.size
+    val userFeatureNum = userFeatureMap.size
 
     /*提取由gbdt做出来的特征*/
-    val gbdtFeature = invitedInfo.map({x=>
-      val s = x._4.replaceAll(",","").split(" ").map(_.toInt)
-      s
-    })
-    val gbdtFeatureMap = gbdtFeature
-      .map(x=>x.map(x=>Set(x)))
-      .reduce({(x,y)=>
-        val combine = for (i<-x.indices) yield {
-          x(i)++y(i)
-        }
-        combine.toArray
-      })
-      .map(_.toArray.zipWithIndex.toMap)
-    var gbdtFeatureNum = 0
-    for (map<-gbdtFeatureMap){
-      gbdtFeatureNum = gbdtFeatureNum + map.size
-    }
+//    val gbdtFeature = invitedInfo.map({x=>
+//      val s = x._4.replaceAll(",","").split(" ").map(_.toInt)
+//      s
+//    })
+//    val gbdtFeatureMap = gbdtFeature
+//      .map(x=>x.map(x=>Set(x)))
+//      .reduce({(x,y)=>
+//        val combine = for (i<-x.indices) yield {
+//          x(i)++y(i)
+//        }
+//        combine.toArray
+//      })
+//      .map(_.toArray.zipWithIndex.toMap)
+//    var gbdtFeatureNum = 0
+//    for (map<-gbdtFeatureMap){
+//      gbdtFeatureNum = gbdtFeatureNum + map.size
+//    }
 
       /*计算所有专家和问题记录（包括有label和没label的数据）的IDF*/
 //    val testQAU = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\nolabel.txt").map({x=>
@@ -364,11 +377,11 @@ object LR {
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
-      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
-      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](0))
+      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](10),new Array[Double](10),new Array[Double](10),new Array[Double](20)))
+      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](143))
       //val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
-      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
-      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
       (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2))
     })
@@ -384,11 +397,11 @@ object LR {
       rel(0) = questionInfo._1.intersect(userInfo._1).length
       rel(1) = questionInfo._2.intersect(userInfo._2).length
       rel(2) = questionInfo._3.intersect(userInfo._3).length
-      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](0),new Array[Double](0),new Array[Double](0),new Array[Double](0)))
-      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](0))
+      val hot = userPreferMap.getOrElse(user,Tuple4(new Array[Double](10),new Array[Double](10),new Array[Double](10),new Array[Double](20)))
+      val hot2 = questionPreferedMap.getOrElse(question,new Array[Double](143))
       //val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
-      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
-      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,featureMap,rawFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
       (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2)))
     })
@@ -412,12 +425,12 @@ object LR {
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
       qid+"\t"+uid+"\t"+feature2.mkString(" ")
     }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+outputName+"\\test")
-    //println(rawFeatureNum)
+    println(data.first()._3.features.size)
   }
 
   def getRawFeature2(question:String,
                     user:String,
-                    questionInfoMap:Map[String,(Array[Int],Array[Int],Array[Int],Int,Int,Int)],
+                    questionInfoMap:Map[String,(Array[Int],Array[Int],Array[Int],Int,Int,Int,Array[Double])],
                     questionAnsweredRate:Map[String,(Int,Int)],
                     userInfoMap:Map[String,(Array[Int],Array[Int],Array[Int])],
                     userAnswerRate:Map[String,(Int,Int)],
@@ -462,7 +475,7 @@ object LR {
       }
     }
     if (user==null){
-      rawFeature++specialQuestion
+      rawFeature++specialQuestion++questionInfo._7
     }else{
       rawFeature++specialUser
     }
