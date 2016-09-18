@@ -1,8 +1,12 @@
 package com
 
+import java.io.PrintWriter
+
+import org.apache.spark.ml.regression.RandomForestRegressor
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.mllib.tree.RandomForest
+import org.apache.spark.mllib.tree.model.RandomForestModel
 import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -11,9 +15,9 @@ import org.apache.spark.{SparkConf, SparkContext}
   */
 object RF {
   def main(args:Array[String]): Unit ={
-    val conf = new SparkConf().setAppName("RF").setMaster("local[4]")
+    val conf = new SparkConf().setAppName("RF").setMaster("local[3]")
     val sc = new SparkContext(conf)
-    val dataName = "15_raw+compress_3rel_userPre50+143"
+    val dataName = "15_raw+compress_3rel_userPre30+20Rate+143Rate"
     train(sc,dataName,35)
   }
   def train(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
@@ -57,23 +61,37 @@ object RF {
     // Empty categoricalFeaturesInfo indicates all features are continuous.
     val numClasses = 2
     val categoricalFeaturesInfo = Map[Int, Int]()
-    val numTrees = 200 // Use more in practice.
+    val numTrees = 180 // Use more in practice.
     val featureSubsetStrategy = "auto" // Let the algorithm choose.
     val impurity = "variance"
-    val maxDepth = 5
-    val maxBins = 32
+   val maxDepth = 8
+    val maxBins = 100
 
-    val model = RandomForest.trainRegressor(trainingData, categoricalFeaturesInfo,
-      numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
+//    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\sta.txt")
+//    for (numTrees<-Range(200,270,20);maxDepth<-4 to 8){
+//      val model = RandomForest.trainRegressor(trainingData, categoricalFeaturesInfo,
+//        numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
+//
+//      // Evaluate model on test instances and compute test error
+//      model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\"+numTrees+"_"+maxDepth)
+//      val labelsAndPredictions = testData.map { point =>
+//        val prediction = model.predict(point.features)
+//        (point.label, prediction)
+//      }
+//      //labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5")
+//      val testMSE = labelsAndPredictions.map{ case(v, p) => math.pow((v - p), 2)}.mean()
+//      out.println(numTrees + " " + maxDepth + " " + testMSE)
+//    }
+//    out.close()
 
-    // Evaluate model on test instances and compute test error
-    val labelsAndPredictions = testData.map { point =>
-      val prediction = model.predict(point.features)
-      (point.label, prediction)
-    }
-    labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5")
-    val testMSE = labelsAndPredictions.map{ case(v, p) => math.pow((v - p), 2)}.mean()
-    println("Test Mean Squared Error = " + testMSE)
+    val model = RandomForest.trainRegressor(training, categoricalFeaturesInfo,
+            numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
+    //val model = RandomForestModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\180_8")
+    val labelsAndPredictions = test.map { case(qid,uid,point) =>
+              val prediction = model.predict(point)
+              qid+","+uid+","+prediction
+            }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF180_8_sub")
+ //   labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5")
 
     //println("Learned regression forest model:\n" + model.toDebugString)
   }

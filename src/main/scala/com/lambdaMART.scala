@@ -11,19 +11,19 @@ object lambdaMART {
   def main(args:Array[String]): Unit ={
     val conf = new SparkConf().setAppName("lambdaMART").setMaster("local[4]")
     val sc = new SparkContext(conf)
-    val dataName = "15_compress_rawQ_rawU_df7_3rel_userPre50+143"
-    //lambdaMART(sc,dataName)
-    val invitedInfo = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\label2.txt")
-      .map({x=>
-        val info = x.split("\t")
-        val question = info(0)
-        val user = info(1)
-        val label = info(2).toInt
-        val gbdtFeature = info(3)
-        (question,user,label,gbdtFeature)
-      }).filter(_._3==0).count()
-    println(invitedInfo)
+    val dataName = "15_raw+compress_3rel_userPre30+20Rate+143Rate"
+    lambdaMART(sc,dataName)
+//    val invitedInfo = sc
+//      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\label2.txt")
+//      .map({x=>
+//        val info = x.split("\t")
+//        val question = info(0)
+//        val user = info(1)
+//        val label = info(2).toInt
+//        val gbdtFeature = info(3)
+//        (question,user,label,gbdtFeature)
+//      }).filter(_._3==0).count()
+//    println(invitedInfo)
   }
   def lambdaMART(sc:SparkContext,inputName:String): Unit ={
     val questionId = sc
@@ -34,7 +34,7 @@ object lambdaMART {
         question
       })
       .zipWithUniqueId()
-    questionId.map(x=>x._1+" "+x._2).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\lambdaMART\\qid")
+    //questionId.map(x=>x._1+" "+x._2).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\lambdaMART\\qid")
     val questionIdMap =questionId.collect().toMap
 
     val trainData = sc
@@ -76,7 +76,7 @@ object lambdaMART {
     val set1 = trainData.map(x=>x._2.toSet).reduce(_++_)
     val set2 = testData.map(x=>x._1.toSet).reduce(_++_)
     val featureMap = (set1++set2).toArray.zipWithIndex.toMap
-println(featureMap.size)
+    val k = (set1++set2).toArray.sorted
 
     val train = trainData.map(x=>{
       val indices = x._2
@@ -98,6 +98,6 @@ println(featureMap.size)
       .sortBy(_._2)
       .map(x=>"0 qid:"+x._2+" "+x._1.mkString(" ")).repartition(1)
       .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\lambdaMART\\test")
-
+    println(featureMap.size)
   }
 }
