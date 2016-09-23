@@ -4,6 +4,7 @@ import java.io.PrintWriter
 
 import org.apache.hadoop.util.hash.Hash
 import org.apache.spark.mllib.classification.{LogisticRegressionModel, LogisticRegressionWithLBFGS, LogisticRegressionWithSGD, SVMWithSGD}
+import org.apache.spark.mllib.feature.Word2VecModel
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
@@ -35,11 +36,12 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_raw+compress_3rel_userPre30+20+143"
-    dataProcessing(sc,0,dataName)
-    //train(sc,dataName,36)
+    val dataName = "15_raw+compress_rawQ_rawU_df5_3rel_userPre50+143_non0_去重"
+    //dataProcessing(sc,0,dataName)
+    //train_pred(sc,dataName)
+    train(sc,dataName,45)
     //SVMTrain(sc,dataName,27)
-    //evaluate(sc)
+    //evaluate(sc,dataName)
     //statistic(sc)
 
     sc.stop()
@@ -91,6 +93,50 @@ object LR {
       .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub"+modelNum)
   }
 
+  def train_pred(sc:SparkContext,inputName:String): Unit ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value,question,user)
+    })
+    val featureNum = data.flatMap(x=>x._2).max()+1
+    val training = data.map(x=>(x._4,x._5,LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3)))).cache()
+
+    val splits = training.randomSplit(Array(0.8,0.2),seed = 11L)
+    val training2 = splits(0).map(x=>x._3).cache()
+    val test2 = splits(1).cache()
+
+    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training2)
+
+    val preAndLabel = test2.map{case (qid,uid,LabeledPoint(label,feature))=>
+      val pre = model.predict(feature)
+      //(pre,label)
+      pre+"\t"+label
+    }.repartition(1)
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\localtest\\res"+inputName)
+
+    evaluate(sc,inputName)
+//    val predictionAndLabel = test2
+//      .map({case (qid,uid,LabeledPoint(label,feature))=>
+//        val prediction = model.clearThreshold().predict(feature)
+//        (qid,uid,prediction,label,Math.abs(label-prediction))
+//      })
+//      .filter(x=>x._4==1.0)
+//      .sortBy(x=>x._5)
+//
+//    predictionAndLabel.map(x=>x._1+"\t"+x._2+"\t"+x._3+"\t"+x._4+"\t"+x._5).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5_noraw")
+  }
+
   def train(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
     val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
       val info = x.split("\t")
@@ -110,52 +156,31 @@ object LR {
     val featureNum = data.flatMap(x=>x._2).max()+1
     val training = data.map(x=>(x._4,x._5,LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3)))).cache()
 
-//    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\test\\part-*").map({x=>
-//      val info = x.split("\t")
-//      val question = info(0)
-//      val user = info(1)
-//      val feature = info(2).split(" ")
-//      val indices = new Array[Int](feature.length)
-//      val value = new Array[Double](feature.length)
-//      for (i<-0 until feature.length){
-//        val indAndVal = feature(i).split(":")
-//        indices(i) = indAndVal(0).toInt-1
-//        value(i) = indAndVal(1).toDouble
-//      }
-//      (question,user,Vectors.sparse(featureNum,indices,value))
-//    }).cache()
+    val test = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\test\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val feature = info(2).split(" ")
+      val indices = new Array[Int](feature.length)
+      val value = new Array[Double](feature.length)
+      for (i<-0 until feature.length){
+        val indAndVal = feature(i).split(":")
+        indices(i) = indAndVal(0).toInt-1
+        value(i) = indAndVal(1).toDouble
+      }
+      (question,user,Vectors.sparse(featureNum,indices,value))
+    }).cache()
 
-    val splits = training.randomSplit(Array(0.8,0.2),seed = 11L)
-    val training2 = splits(0).map(x=>x._3).cache()
-    val test2 = splits(1).cache()
-
-    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training2)
-//    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub"+modelNum)
-//    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub"+modelNum).clearThreshold()
-//    val predictionAndLabel = test
-//      .map({x=>
-//        val prediction = model2.predict(x._3).toFloat
-//        x._1+","+x._2+","+prediction
-//      })
-//      .repartition(1)
-//      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub"+modelNum)
-
-    val preAndLabel = test2.map{case (qid,uid,LabeledPoint(label,feature))=>
-      val pre = model.predict(feature)
-      //(pre,label)
-      pre+"\t"+label
-    }.repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res"+inputName)
-
-//    val predictionAndLabel = test2
-//      .map({case (qid,uid,LabeledPoint(label,feature))=>
-//        val prediction = model.clearThreshold().predict(feature)
-//        (qid,uid,prediction,label,Math.abs(label-prediction))
-//      })
-//      .filter(x=>x._4==1.0)
-//      .sortBy(x=>x._5)
-
-    //predictionAndLabel.map(x=>x._1+"\t"+x._2+"\t"+x._3+"\t"+x._4+"\t"+x._5).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5_noraw")
+    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training.map(x=>x._3))
+    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub\\modelSub"+modelNum)
+    val model2 = LogisticRegressionModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelSub\\modelSub"+modelNum).clearThreshold()
+    val predictionAndLabel = test
+      .map({x=>
+        val prediction = model2.predict(x._3).toFloat
+        x._1+","+x._2+","+prediction
+      })
+      .repartition(1)
+      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub\\resSub"+modelNum)
   }
 
   def dataProcessing(sc:SparkContext,minCount:Int,outputName:String):Unit = {
@@ -332,6 +357,34 @@ object LR {
     val questionFeatureNum = questionFeatureMap.size
     val userFeatureNum = userFeatureMap.size
 
+//    val questionFeatureMap = questionInfo
+//      .flatMap({x=>
+//        (x._2._1++x._2._2++x._2._3).distinct
+//      })
+//      .map(x=>(x,1))
+//      .reduceByKey(_+_)
+//      .filter(_._2 > minCount)
+//      .map(_._1)
+//      .zipWithIndex()
+//      .map(x=>(x._1,x._2.toInt))
+//      .collect()
+//      .toMap
+//    val userFeatureMap = userInfo.flatMap({x=>
+//      (x._2._1++x._2._2++x._2._3).distinct
+//    })
+//      .map(x=>(x,1))
+//      .reduceByKey(_+_)
+//      .sortBy(x=>x._2)
+//      .filter(_._2 > minCount)
+//      .map(_._1)
+//      .zipWithIndex()
+//      .map(x=>(x._1,x._2.toInt))
+//      .collect()
+//      .toMap
+//
+//    val questionFeatureNum = questionFeatureMap.size
+//    val userFeatureNum = userFeatureMap.size
+
     /*提取由gbdt做出来的特征*/
 //    val gbdtFeature = invitedInfo.map({x=>
 //      val s = x._4.replaceAll(",","").split(" ").map(_.toInt)
@@ -383,6 +436,10 @@ object LR {
 //      }
 //    }
 
+    /*word2Vec*/
+    val model = Word2VecModel.load(sc, "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2Vec_10_50_4")
+    val word2vecMap = model.getVectors
+
     /*提取没label的专家-问题记录的特征*/
     val testOnline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\nolabel2.txt").map({x=>
       val sp = x.split("\t")
@@ -400,8 +457,8 @@ object LR {
       val hot2 = questionPreferedMap.getOrElse(question,(new Array[Double](143),new Array[Double](143)))
       //val qPreferedULabelRate = hot2._1.zip(hot2._2).map(x=>if (x._2!=0) {x._1 * 1.0 / x._2} else {0})
       //val gbdtFeatureInd = sp(1).replaceAll(",","").split(" ").map(_.toInt)
-      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum)
-      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum,word2vecMap)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum,word2vecMap)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
       (question,user,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2._1))
     })
@@ -422,8 +479,8 @@ object LR {
       val hot2 = questionPreferedMap.getOrElse(question,(new Array[Double](143),new Array[Double](143)))
       //val qPreferedULabelRate = hot2._1.zip(hot2._2).map(x=>if (x._2!=0) {x._1 * 1.0 / x._2} else {0})
       //val gbdtFeatureInd = x._4.replaceAll(",","").split(" ").map(_.toInt)
-      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum)
-      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum)
+      val rawQuestionFeature = getRawFeature2(question,null,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,questionFeatureMap,questionFeatureNum,word2vecMap)
+      val rawUserFeature = getRawFeature2(null,user,questionInfoMap,questionAnsweredRate,userInfoMap,userAnswerRate,userFeatureMap,userFeatureNum,word2vecMap)
       //val gbdtFeature = getGBDTFeature(gbdtFeatureInd,gbdtFeatureMap,gbdtFeatureNum)
       (question,user,LabeledPoint(label.toDouble,Vectors.dense(rawQuestionFeature++rawUserFeature++rel++hot._1++hot._2++hot._3++hot._4++hot2._1)))
     })
@@ -457,7 +514,8 @@ object LR {
                     userInfoMap:Map[String,(Array[Int],Array[Int],Array[Int])],
                     userAnswerRate:Map[String,(Int,Int)],
                     featureMap:Map[Int,Int],
-                    rawFeatureNum:Int): Array[Double] ={
+                    rawFeatureNum:Int,
+                     word2VecMap:Map[String,Array[Float]]): Array[Double] ={
     val rawFeature = new Array[Double](rawFeatureNum)
     val questionInfo = questionInfoMap.getOrElse(question,null)
     val userInfo = userInfoMap.getOrElse(user,null)
@@ -466,10 +524,16 @@ object LR {
     }else{
       userInfo._1++userInfo._2++userInfo._3
     }
+    val vecSize = word2VecMap("0").length
+    val word2Vec = new Array[Double](vecSize)
     for (tag<-tags){
       val ind = featureMap.getOrElse(tag,-1)
       if (ind != -1) {
         rawFeature(ind) = rawFeature(ind) + 1
+      }
+      val vec = word2VecMap(tag.toString)
+      for (i<-0 until vecSize){
+        word2Vec(i) = word2Vec(i) + vec(i)
       }
     }
     val specialQuestion = new Array[Double](9)
@@ -497,9 +561,9 @@ object LR {
       }
     }
     if (user==null){
-      /*rawFeature++*/specialQuestion++questionInfo._7
+      /*rawFeature++*/specialQuestion++questionInfo._7++word2Vec
     }else{
-      /*rawFeature++*/specialUser
+      /*rawFeature++*/specialUser++word2Vec
     }
   }
 
@@ -558,8 +622,8 @@ object LR {
     cutInfo
   }
 
-  def evaluate(sc:SparkContext): Unit ={
-    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res15_raw+compress_rawQ_rawU_df5_3rel_userPre30+20Rate+143Rate_non0\\part-00000").map{x=>
+  def evaluate(sc:SparkContext,inputName:String): Unit ={
+    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\localtest\\res"+inputName+"\\part-00000").map{x=>
       val info = x.split("\t")
       val pre = info(0).toDouble
       val label = info(1).toDouble
@@ -616,51 +680,74 @@ object LR {
       .collect()
       .toMap
 
+//    val invitedInfo = sc
+//      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\label2.txt")
+//      .map({x=>
+//        val info = x.split("\t")
+//        val question = info(0)
+//        val user = info(1)
+//        val label = info(2).toInt
+//        val goodAnswer = questionInfo(question)._6
+//        (question,(label,1))
+//      })
+//      .reduceByKey{case(x,y)=>(x._1+y._1,x._2+y._2)}
+//      .map(x=>(x._1,(x._2._1,x._2._2,x._2._1*1.0/x._2._2)))
+//      .sortBy(_._4)
+//      .map(x=>x._1+"~"+x._2+"~"+x._3+"~"+x._4)
+//      .repartition(1)
+//      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\userSta")
+
     val invitedInfo = sc
       .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\label2.txt")
       .map({x=>
         val info = x.split("\t")
         val question = info(0)
         val user = info(1)
-        val label = info(2).toInt
-        val goodAnswer = questionInfo(question)._6
-        (question,(label,1))
+        (question,user)
       })
-      .reduceByKey{case(x,y)=>(x._1+y._1,x._2+y._2)}
-      .map(x=>(x._1,(x._2._1,x._2._2,x._2._1*1.0/x._2._2)))
-//      .sortBy(_._4)
-//      .map(x=>x._1+"~"+x._2+"~"+x._3+"~"+x._4)
-//      .repartition(1)
-//      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\userSta")
+
+    val questionID = invitedInfo.map(_._1).distinct().collect()
+    val userID = invitedInfo.map(_._2).distinct().collect()
+
+    val testOnline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\nolabel2.txt").map({x=>
+      val sp = x.split("\t")
+      val info = sp(0).split(",")
+      val question = info(0)
+      val user = info(1)
+      (question,user)
+    })
+    val cnt1 = testOnline.filter(x=> questionID.contains(x._1) && userID.contains(x._2)).count()
+    val cnt2 = testOnline.filter(x=> !questionID.contains(x._1) && userID.contains(x._2)).count()
+    val cnt3 = testOnline.filter(x=> questionID.contains(x._1) && !userID.contains(x._2)).count()
+    val cnt4 = testOnline.filter(x=> !questionID.contains(x._1) && !userID.contains(x._2)).count()
+    println(cnt1+" "+cnt2+" "+cnt3+" "+cnt4)
 
 
-
-
-    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5\\part-*")
-      .map{x=>
-        val info = x.split("\t")
-        val qid = info(0)
-        val uid = info(1)
-        val pre = info(2).toDouble
-        val lable = info(3).toDouble
-        val diff = info(4).toDouble
-        (qid,(uid,diff))
-      }
-      .filter(_._2._2>0.9)
+//    val input = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5\\part-*")
 //      .map{x=>
-//        val qInfo = questionInfo(x._1)
-//        val uInfo = userInfo(x._2)
-//        val qTags = qInfo._1++qInfo._2++qInfo._3
-//        val uTags = uInfo._1++uInfo._2++uInfo._3
-//        qInfo._1.mkString("/")+" "+qInfo._2.mkString("/")+" "+qInfo._3.mkString("/")+" "+qInfo._4+" "+qInfo._5+" "+qInfo._6 +
-//          "~"+uInfo._1.mkString("/")+" "+uInfo._2.mkString("/")+" "+uInfo._3.mkString("/")+"~"+qTags.intersect(uTags).length
-//      }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5\\haha3")
-
-    val out = input
-      .join(invitedInfo)
-      .map(x=>x._1+"\t"+x._2._1._1+"\t"+x._2._2._1+"\t"+x._2._2._2+"\t"+x._2._2._3)
-      .repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\BadCaseQSta")
+//        val info = x.split("\t")
+//        val qid = info(0)
+//        val uid = info(1)
+//        val pre = info(2).toDouble
+//        val lable = info(3).toDouble
+//        val diff = info(4).toDouble
+//        (qid,(uid,diff))
+//      }
+//      .filter(_._2._2>0.9)
+////      .map{x=>
+////        val qInfo = questionInfo(x._1)
+////        val uInfo = userInfo(x._2)
+////        val qTags = qInfo._1++qInfo._2++qInfo._3
+////        val uTags = uInfo._1++uInfo._2++uInfo._3
+////        qInfo._1.mkString("/")+" "+qInfo._2.mkString("/")+" "+qInfo._3.mkString("/")+" "+qInfo._4+" "+qInfo._5+" "+qInfo._6 +
+////          "~"+uInfo._1.mkString("/")+" "+uInfo._2.mkString("/")+" "+uInfo._3.mkString("/")+"~"+qTags.intersect(uTags).length
+////      }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\res0.8_df5\\haha3")
+//
+//    val out = input
+//      .join(invitedInfo)
+//      .map(x=>x._1+"\t"+x._2._1._1+"\t"+x._2._2._1+"\t"+x._2._2._2+"\t"+x._2._2._3)
+//      .repartition(1)
+//      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\BadCaseQSta")
 
   }
 }

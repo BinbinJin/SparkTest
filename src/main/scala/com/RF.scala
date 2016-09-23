@@ -17,8 +17,8 @@ object RF {
   def main(args:Array[String]): Unit ={
     val conf = new SparkConf().setAppName("RF").setMaster("local[3]")
     val sc = new SparkContext(conf)
-    val dataName = "15_raw+compress_3rel_userPre30+20Rate+143Rate"
-    train(sc,dataName,35)
+    val dataName = "15_compress_rawQ_rawU_df0_3rel_userPre50+143_non0_L1"
+    train(sc,dataName,43)
   }
   def train(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
     val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
@@ -61,10 +61,10 @@ object RF {
     // Empty categoricalFeaturesInfo indicates all features are continuous.
     val numClasses = 2
     val categoricalFeaturesInfo = Map[Int, Int]()
-    val numTrees = 180 // Use more in practice.
+    val numTrees = 200 // Use more in practice.
     val featureSubsetStrategy = "auto" // Let the algorithm choose.
     val impurity = "variance"
-   val maxDepth = 8
+   val maxDepth = 5
     val maxBins = 100
 
 //    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\sta.txt")
@@ -90,7 +90,7 @@ object RF {
     val labelsAndPredictions = test.map { case(qid,uid,point) =>
               val prediction = model.predict(point)
               qid+","+uid+","+prediction
-            }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF180_8_sub")
+            }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5_487_sub")
  //   labelsAndPredictions.saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5")
 
     //println("Learned regression forest model:\n" + model.toDebugString)
