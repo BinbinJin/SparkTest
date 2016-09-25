@@ -36,10 +36,10 @@ object LR {
 //    splits(0).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.2Data")
 //    splits(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\0.8Data")
 
-    val dataName = "15_raw+compress_rawQ_rawU_df5_3rel_userPre50+143_non0_去重"
+    val dataName = "qid_uid"
     //dataProcessing(sc,0,dataName)
-    //train_pred(sc,dataName)
-    train(sc,dataName,45)
+    train_pred(sc,dataName)
+    //train(sc,dataName,48)
     //SVMTrain(sc,dataName,27)
     //evaluate(sc,dataName)
     //statistic(sc)
@@ -118,14 +118,18 @@ object LR {
 
     val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training2)
 
-    val preAndLabel = test2.map{case (qid,uid,LabeledPoint(label,feature))=>
-      val pre = model.predict(feature)
-      //(pre,label)
-      pre+"\t"+label
-    }.repartition(1)
-      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\localtest\\res"+inputName)
+    val preAndLabel = test2
+      .map{case (qid,uid,LabeledPoint(label,feature))=>
+        val pre = model.predict(feature)
+        (qid,uid,pre,label.toInt)
+      }
 
-    evaluate(sc,inputName)
+    val ndcg = NDCG.NDCG(preAndLabel)
+    println(ndcg)
+//      .repartition(1)
+//      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\localtest\\res"+inputName)
+
+//    evaluate(sc,inputName)
 //    val predictionAndLabel = test2
 //      .map({case (qid,uid,LabeledPoint(label,feature))=>
 //        val prediction = model.clearThreshold().predict(feature)
