@@ -14,6 +14,7 @@ object NDCG {
     val fileName = "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF100_4"
     val input = sc.textFile(fileName).map{x=>
       val info = x.split("\t")
+      val random = scala.util.Random.nextDouble()
       (info(0),info(1),info(2).toDouble,info(3).toDouble.toInt)
     }
     val ndcg = NDCG(input)

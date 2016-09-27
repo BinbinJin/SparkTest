@@ -57,10 +57,11 @@ object RF {
 
     //prediction(training,test)
     val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\"+inputName+"_ndcg.txt")
-    for (numTrees <- Range(100,300,20))
-      for (maxDepth <- Range(6,8,1)){
-        val ndcg = localTest(training,numTrees,maxDepth)
-        out.println(numTrees+" "+maxDepth+" "+ndcg)
+    for (numTrees <- Range(100,110,20))
+      for (maxDepth <- Range(6,7,1)){
+//        val ndcg = localTest(training,numTrees,maxDepth)
+//        println(numTrees+" "+maxDepth+" "+ndcg)
+        prediction(training,test,numTrees,maxDepth)
       }
 
 //    println(ndcg3)
@@ -84,26 +85,25 @@ object RF {
 //    out.close()
   }
 
-  def prediction(train:RDD[LabeledPoint],test:RDD[(String,String,Vector)]): Unit ={
+  def prediction(train:RDD[(String,String,LabeledPoint)],test:RDD[(String,String,Vector)],numTrees:Int,maxDepth:Int): Unit ={
     val numClasses = 2
     val categoricalFeaturesInfo = Map[Int, Int]()
-    val numTrees = 200 // Use more in practice.
     val featureSubsetStrategy = "auto" // Let the algorithm choose.
     val impurity = "variance"
-    val maxDepth = 5
     val maxBins = 100
+    val training = train.map(x=>x._3)
 
-    val model = RandomForest.trainRegressor(train, categoricalFeaturesInfo,
+    val model = RandomForest.trainRegressor(training, categoricalFeaturesInfo,
       numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
     //val model = RandomForestModel.load(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\180_8")
     val labelsAndPredictions = test.map { case(qid,uid,point) =>
       val prediction = model.predict(point)
       qid+","+uid+","+prediction
-    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF200_5_487_sub")
+    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF_"+numTrees+"_"+maxDepth +"_sub")
   }
 
   def localTest(data:RDD[(String,String,LabeledPoint)],numTrees:Int,maxDepth:Int): Double ={
-    val splits = data.randomSplit(Array(0.8, 0.2))
+    val splits = data.randomSplit(Array(0.9, 0.1),11L)
     val (trainingData, testData) = (splits(0), splits(1))
 
     val categoricalFeaturesInfo = Map[Int, Int]()

@@ -64,8 +64,13 @@ object word2Vec {
 
     val sentence = user1.union(user2).union(q1).union(q2)
     val word2Vec = new Word2Vec()
-    val model = word2Vec.setMinCount(0).setNumIterations(10).setVectorSize(50).setWindowSize(4).fit(sentence)
-    model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2Vec_10_50_4")
+    for (vecSize<-Range(60,100,10)){
+      for (windowSize<-Range(3,7,1)){
+        val model = word2Vec.setMinCount(0).setNumIterations(10).setVectorSize(vecSize).setWindowSize(windowSize).fit(sentence)
+        model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2vec\\word2Vec_10_"+vecSize+"_"+windowSize)
+      }
+    }
+
 
   }
 }
