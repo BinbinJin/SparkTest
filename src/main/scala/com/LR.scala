@@ -46,14 +46,15 @@ object LR {
 //    }
 //    out.close()
 
-    val dataName = "featAll2"
+    val dataName = "raw_answerRate6_intersection2_dis163_hot7"
     //dataProcessing(sc,0,dataName)
-//    val ndcg = train_pred(sc,dataName)
-    ///println(ndcg)
-//    train(sc,dataName,54)
+    train(sc,dataName,68)
+//    val (pre,ndcg) = train_pred(sc,dataName)
+//    println(pre+" "+ndcg)
+
     //SVMTrain(sc,dataName,27)
     //evaluate(sc,dataName)
-    statistic(sc)
+//    statistic(sc)
 
     sc.stop()
   }
@@ -104,8 +105,8 @@ object LR {
       .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\resSub"+modelNum)
   }
 
-  def train_pred(sc:SparkContext,inputName:String): Double ={
-    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
+  def train_pred(sc:SparkContext,inputName:String): (Double,Double) ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
       val info = x.split("\t")
       val question = info(0)
       val user = info(1)
@@ -121,24 +122,40 @@ object LR {
       (label,indices,value,question,user)
     })
     val featureNum = data.flatMap(x=>x._2).max()+1
-    val training = data.map(x=>(x._4,x._5,LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3)))).cache()
+    val train = data.map(x=>LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3))).cache()
 
-    val splits = training.randomSplit(Array(0.9,0.1),seed = 11L)
-    val training2 = splits(0).map(x=>x._3).cache()
-    val test2 = splits(1).cache()
+    val data2 = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+inputName+"\\test\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value,question,user)
+    })
+    val validaion = data2.map(x=>(x._4,x._5,LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3)))).cache()
+//    val splits = training.randomSplit(Array(0.9,0.1),seed = 11L)
+//    val training2 = splits(0).map(x=>x._3).cache()
+//    val test2 = splits(1).cache()
 
-    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(training2)
+    val model = new LogisticRegressionWithLBFGS().setNumClasses(2).run(train)
 
-    val preAndLabel = test2
+    val preAndLabel = validaion
       .map{case (qid,uid,LabeledPoint(label,feature))=>
         val pre = model.predict(feature)
         (qid,uid,pre,label.toInt)
       }
 
     val ndcg = NDCG.NDCG(preAndLabel)
-//    val pre = evaluate(preAndLabel)
-//    pre
-    ndcg
+    val pre = evaluate(preAndLabel)
+    //println(pre+" "+ndcg)
+    (pre,ndcg)
 //      .repartition(1)
 //      .saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\localtest\\res"+inputName)
 
@@ -670,7 +687,7 @@ object LR {
       ((qid,uid),1.0)
     }
 
-    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\merge.csv").map{x=>
+    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\RF_FM.csv").map{x=>
       val info = x.split(",")
       val qid = info(0)
       val uid = info(1)
@@ -684,7 +701,7 @@ object LR {
       val uid = x._1._2
       val score = if (x._2._2 == None){x._2._1}else {0.0}
       qid+","+uid+","+score
-    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\merge_aft")
+    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\RF_FM_rule")
 
   }
 }

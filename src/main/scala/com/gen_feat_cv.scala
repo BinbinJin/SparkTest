@@ -2,33 +2,32 @@ package com
 
 import java.io.PrintWriter
 
-import org.apache.spark.mllib.feature.Word2VecModel
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.mllib.linalg.Vectors
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.mutable
 
 /**
-  * Created by zjcxj on 2016/9/22.
+  * Created by zjcxj on 2016/9/30.
   */
-object gen_feat {
+object gen_feat_cv {
   def main(args: Array[String]): Unit = {
-    val conf = new SparkConf().setAppName("gen_feat").setMaster("local[4]")
+    val conf = new SparkConf().setAppName("genFeatCV").setMaster("local[4]")
     val sc = new SparkContext(conf)
-//    for (vecSize<-Range(60,100,10)){
-//      for (windowSize<-Range(3,7,1)){
-//        val dataName = "word2vec_"+vecSize+"_"+windowSize
-//        val embedding = "10_"+vecSize+"_"+windowSize
-//        featExtract(sc,dataName,embedding,5)
-//      }
-//    }
-    val dataName = "raw_answerRate6_intersection4_dis163_hot7"
+    //    for (vecSize<-Range(60,100,10)){
+    //      for (windowSize<-Range(3,7,1)){
+    //        val dataName = "word2vec_"+vecSize+"_"+windowSize
+    //        val embedding = "10_"+vecSize+"_"+windowSize
+    //        featExtract(sc,dataName,embedding,5)
+    //      }
+    //    }
+    val dataName = "answerRate6_Des6_intersection4_dis163_preferDis33_hot7"
     val embedding = "10_40_3"
     featExtract(sc,dataName,embedding,5)
-//    sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map(x=>x.split(","))
-//      .map(x=>((x(0),x(1)),1)).reduceByKey(_+_).sortByKey().repartition(1).saveAsTextFile("./haha2")
+    //    sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map(x=>x.split(","))
+    //      .map(x=>((x(0),x(1)),1)).reduceByKey(_+_).sortByKey().repartition(1).saveAsTextFile("./haha2")
   }
   def featExtract(sc:SparkContext,outName:String,embeddingName:String,minCount:Int): Unit ={
     val userInfo = sc
@@ -57,7 +56,7 @@ object gen_feat {
       }).cache()
 
     val invitedInfo = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\invited_info_train.txt")
+      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\train.txt")
       .map({x=>
         val info = x.split("\t")
         val question = info(0)
@@ -187,9 +186,9 @@ object gen_feat {
     }
 
     /*使用embedding*/
-//    val model = Word2VecModel.load(sc, "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2vec\\word2Vec_"+embeddingName)
-//    val word2vecMap = model.getVectors
-//    val vecSize = word2vecMap("0").length
+    //    val model = Word2VecModel.load(sc, "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2vec\\word2Vec_"+embeddingName)
+    //    val word2vecMap = model.getVectors
+    //    val vecSize = word2vecMap("0").length
 
     /*使用qid和uid*/
     val qid = questionInfo.map(x=>x._1)
@@ -199,13 +198,13 @@ object gen_feat {
     val idFeatMap = qid.union(uid).zipWithIndex().collect().toMap
 
     /*对自己设计的特征进行归一化*/
-//    val norm = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\dis\\min_max.txt").map{x=>
-//      val info = x.split(" ")
-//      val ind = info(0).toInt
-//      val min = info(1).toDouble
-//      val max = info(2).toDouble
-//      (ind,(min,max))
-//    }.collect()
+    //    val norm = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\统计\\dis\\min_max.txt").map{x=>
+    //      val info = x.split(" ")
+    //      val ind = info(0).toInt
+    //      val min = info(1).toDouble
+    //      val max = info(2).toDouble
+    //      (ind,(min,max))
+    //    }.collect()
 
     /*对于qid，uid对，将对应回答的id全部加进去*/
     val qid_uidArr = invitedInfo.filter(x=> x._3==1).map{x=>(x._1,x._2)}.groupByKey().collect().toMap
@@ -225,26 +224,30 @@ object gen_feat {
       val label = x._3
 
 //      val idFeat = genIdFeat(question,user,idFeatMap)
-
+//
 //      val qid_uidarr = genCorFeat(question,uidFeatMap,qid_uidArr)
 //      val uid_qidarr = genCorFeat(user,qidFeatMap,uid_qidArr)
+      //      val qInd = qidFeatMap(question)
+      //      val uInd = uidFeatMap(user)
+      //      qid_uidarr(uInd.toInt) = 1
+      //      uid_qidarr(qInd.toInt) = 1
 
 
-      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
-      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
+//      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
+//      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
 
       val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
       val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
-//      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
-//      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
-//
-//      val labelFeat = genLabelFeat(qDes._1,uDes._1)
+      //      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
+      //      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
+      //
+      //      val labelFeat = genLabelFeat(qDes._1,uDes._1)
 
       val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
       val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
 
-//      val qDesNum = genDescribeNum(question,qDes)
-//      val uDesNum = genDescribeNum(user,uDes)
+      val qDesNum = genDescribeNum(question,qDes)
+      val uDesNum = genDescribeNum(user,uDes)
 
       val intersectionNum = genIntersectionNum(qDes,uDes)
 
@@ -252,43 +255,48 @@ object gen_feat {
       val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
       val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
 
-//      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
+      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
 
       val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
 
-      val featAll = rawQuestionFeat++rawUserFeat++qAnswerRate++uAnswerRate++intersectionNum++dis++hot
-//      for ((ind,(min,max))<- norm){
-//        featAll(ind) = (featAll(ind)-min) / (max-min)
-//      }
+      val featAll = qAnswerRate++uAnswerRate++qDesNum++uDesNum++intersectionNum++dis++uPreferDis++hot
+      //      for ((ind,(min,max))<- norm){
+      //        featAll(ind) = (featAll(ind)-min) / (max-min)
+      //      }
 
       (question,user,LabeledPoint(label.toDouble,Vectors.dense(featAll)))
     })
 
-    val testOnline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map({x=>
-      val info = x.split(",")
+    val testOffline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validation.txt").map({x=>
+      val info = x.split("\t")
       val question = info(0)
       val user = info(1)
+      val label = info(2).toInt
 
 //      val idFeat = genIdFeat(question,user,idFeatMap)
-
+//
 //      val qid_uidarr = genCorFeat(question,uidFeatMap,qid_uidArr)
 //      val uid_qidarr = genCorFeat(user,qidFeatMap,uid_qidArr)
+      //      val qInd = qidFeatMap(question)
+      //      val uInd = uidFeatMap(user)
+      //      qid_uidarr(uInd.toInt) = 1
+      //      uid_qidarr(qInd.toInt) = 1
 
-      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
-      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
+//      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
+//      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
 
       val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
       val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
-//      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
-//      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
+      //      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
+      //      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
 
-//      val labelFeat = genLabelFeat(qDes._1,uDes._1)
+      //      val labelFeat = genLabelFeat(qDes._1,uDes._1)
 
       val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
       val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
 
-//      val qDesNum = genDescribeNum(question,qDes)
-//      val uDesNum = genDescribeNum(user,uDes)
+      val qDesNum = genDescribeNum(question,qDes)
+      val uDesNum = genDescribeNum(user,uDes)
 
       val intersectionNum = genIntersectionNum(qDes,uDes)
 
@@ -296,15 +304,15 @@ object gen_feat {
       val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
       val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
 
-//      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
+      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
 
       val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
 
-      val featAll = rawQuestionFeat++rawUserFeat++qAnswerRate++uAnswerRate++intersectionNum++dis++hot
-//      for ((ind,(min,max))<- norm){
-//        featAll(ind) = (featAll(ind)-min) / (max-min)
-//      }
-      (question,user,Vectors.dense(featAll))
+      val featAll = qAnswerRate++uAnswerRate++qDesNum++uDesNum++intersectionNum++dis++uPreferDis++hot
+      //      for ((ind,(min,max))<- norm){
+      //        featAll(ind) = (featAll(ind)-min) / (max-min)
+      //      }
+      (question,user,Vectors.dense(featAll),label)
     })
 
     //staDis(train)
@@ -319,16 +327,17 @@ object gen_feat {
       val value = feature.values
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
       qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+outName+"\\train")
-    testOnline.map(x=>{
+    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\train")
+    testOffline.map(x=>{
       val qid = x._1
       val uid = x._2
       val feature = x._3.toSparse
+      val label = x._4
       val indices = feature.indices.map(x=>x+1)
       val value = feature.values
       val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
-      qid+"\t"+uid+"\t"+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+outName+"\\test")
+      qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
+    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\test")
     println(train.first()._3.features.size)
   }
 
@@ -436,11 +445,11 @@ object gen_feat {
   }
 
   def genRawFeature(question:String,
-                     user:String,
-                     questionInfoMap:Map[String,(Array[Int],Array[Int],Array[Int],Int,Int,Int,Array[Double])],
-                     userInfoMap:Map[String,(Array[Int],Array[Int],Array[Int])],
-                     featureMap:Map[Int,Int],
-                     rawFeatureNum:Int): Array[Double] ={
+                    user:String,
+                    questionInfoMap:Map[String,(Array[Int],Array[Int],Array[Int],Int,Int,Int,Array[Double])],
+                    userInfoMap:Map[String,(Array[Int],Array[Int],Array[Int])],
+                    featureMap:Map[Int,Int],
+                    rawFeatureNum:Int): Array[Double] ={
     val rawFeature = new Array[Double](rawFeatureNum)
     val questionInfo = questionInfoMap.getOrElse(question,null)
     val userInfo = userInfoMap.getOrElse(user,null)
