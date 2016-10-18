@@ -23,7 +23,7 @@ object gen_feat_cv {
     //        featExtract(sc,dataName,embedding,5)
     //      }
     //    }
-    val dataName = "answerRate6_Des6_intersection4_dis163_preferDis33_hot7"
+    val dataName = "qid_uid_bin"
     val embedding = "10_40_3"
     featExtract(sc,dataName,embedding,5)
     //    sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map(x=>x.split(","))
@@ -61,7 +61,7 @@ object gen_feat_cv {
         val info = x.split("\t")
         val question = info(0)
         val user = info(1)
-        val label = info(2).toInt
+        val label = if (info(2).toInt==1) {1} else {-1}
         (question,user,label)
       })
       .cache()
@@ -223,7 +223,7 @@ object gen_feat_cv {
       val user = x._2
       val label = x._3
 
-//      val idFeat = genIdFeat(question,user,idFeatMap)
+      val idFeat = genIdFeat(question,user,idFeatMap)
 //
 //      val qid_uidarr = genCorFeat(question,uidFeatMap,qid_uidArr)
 //      val uid_qidarr = genCorFeat(user,qidFeatMap,uid_qidArr)
@@ -236,30 +236,30 @@ object gen_feat_cv {
 //      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
 //      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
 
-      val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
-      val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
+//      val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
+//      val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
       //      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
       //      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
       //
       //      val labelFeat = genLabelFeat(qDes._1,uDes._1)
 
-      val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
-      val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
+//      val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
+//      val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
+//
+//      val qDesNum = genDescribeNum(question,qDes)
+//      val uDesNum = genDescribeNum(user,uDes)
+//
+//      val intersectionNum = genIntersectionNum(qDes,uDes)
+//
+//      val uAnswerDis = userQLabelMap.getOrElse(user,(new Array[Double](20),new Array[Double](20),new Array[Double](20),Array[Double](20)))
+//      val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
+//      val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
+//
+//      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
+//
+//      val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
 
-      val qDesNum = genDescribeNum(question,qDes)
-      val uDesNum = genDescribeNum(user,uDes)
-
-      val intersectionNum = genIntersectionNum(qDes,uDes)
-
-      val uAnswerDis = userQLabelMap.getOrElse(user,(new Array[Double](20),new Array[Double](20),new Array[Double](20),Array[Double](20)))
-      val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
-      val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
-
-      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
-
-      val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
-
-      val featAll = qAnswerRate++uAnswerRate++qDesNum++uDesNum++intersectionNum++dis++uPreferDis++hot
+      val featAll = idFeat
       //      for ((ind,(min,max))<- norm){
       //        featAll(ind) = (featAll(ind)-min) / (max-min)
       //      }
@@ -271,9 +271,9 @@ object gen_feat_cv {
       val info = x.split("\t")
       val question = info(0)
       val user = info(1)
-      val label = info(2).toInt
+      val label = if (info(2).toInt==1) {1} else {-1}
 
-//      val idFeat = genIdFeat(question,user,idFeatMap)
+      val idFeat = genIdFeat(question,user,idFeatMap)
 //
 //      val qid_uidarr = genCorFeat(question,uidFeatMap,qid_uidArr)
 //      val uid_qidarr = genCorFeat(user,qidFeatMap,uid_qidArr)
@@ -285,30 +285,30 @@ object gen_feat_cv {
 //      val rawQuestionFeat = genRawFeature(question,null,questionInfoMap,userInfoMap,questionFeatureMap,questionFeatureNum)
 //      val rawUserFeat = genRawFeature(null,user,questionInfoMap,userInfoMap,userFeatureMap,userFeatureNum)
 
-      val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
-      val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
+//      val qDes = (questionInfoMap(question)._1,questionInfoMap(question)._2,questionInfoMap(question)._3)
+//      val uDes = (userInfoMap(user)._1,userInfoMap(user)._2,userInfoMap(user)._3)
       //      val word2vecQFeat = genWord2VecFeat(qDes,word2vecMap,vecSize)
       //      val word2vecUFeat = genWord2VecFeat(uDes,word2vecMap,vecSize)
 
       //      val labelFeat = genLabelFeat(qDes._1,uDes._1)
 
-      val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
-      val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
-
-      val qDesNum = genDescribeNum(question,qDes)
-      val uDesNum = genDescribeNum(user,uDes)
-
-      val intersectionNum = genIntersectionNum(qDes,uDes)
-
-      val uAnswerDis = userQLabelMap.getOrElse(user,(new Array[Double](20),new Array[Double](20),new Array[Double](20),Array[Double](20)))
-      val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
-      val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
-
-      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
-
-      val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
-
-      val featAll = qAnswerRate++uAnswerRate++qDesNum++uDesNum++intersectionNum++dis++uPreferDis++hot
+//      val qAnswerRate = genAnswerRateFeat(question,questionAnsweredRate)
+//      val uAnswerRate = genAnswerRateFeat(user,userAnswerRate)
+//
+//      val qDesNum = genDescribeNum(question,qDes)
+//      val uDesNum = genDescribeNum(user,uDes)
+//
+//      val intersectionNum = genIntersectionNum(qDes,uDes)
+//
+//      val uAnswerDis = userQLabelMap.getOrElse(user,(new Array[Double](20),new Array[Double](20),new Array[Double](20),Array[Double](20)))
+//      val qAnswerDis = questionULbaleMap.getOrElse(question,(new Array[Double](143),new Array[Double](143),new Array[Double](143),new Array[Double](143)))
+//      val dis = uAnswerDis._1/*++uAnswerDis._2++uAnswerDis._3++uAnswerDis._4*/++qAnswerDis._1/*++qAnswerDis._2++qAnswerDis._3++qAnswerDis._4*/
+//
+//      val uPreferDis = genUPrefer(question,user,questionInfoMap,sagMap)
+//
+//      val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
+//
+      val featAll = idFeat
       //      for ((ind,(min,max))<- norm){
       //        featAll(ind) = (featAll(ind)-min) / (max-min)
       //      }

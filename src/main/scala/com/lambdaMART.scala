@@ -11,13 +11,13 @@ object lambdaMART {
   def main(args:Array[String]): Unit ={
     val conf = new SparkConf().setAppName("lambdaMART").setMaster("local[4]")
     val sc = new SparkContext(conf)
-    val dataName = "16_raw+compress_3rel_userPre50+143+word2Vec10_20_4"
+    val dataName = "qid_uid"
     lambdaMART(sc,dataName)
   }
 
   def lambdaMART(sc:SparkContext,inputName:String): Unit ={
     val questionId = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\question_info.txt")
+      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\question_info.txt")
       .map({x=>
         val info = x.split("\t")
         val question = info(0)

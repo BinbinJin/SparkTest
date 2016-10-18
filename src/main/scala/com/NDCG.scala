@@ -11,11 +11,12 @@ object NDCG {
     val conf = new SparkConf().setAppName("modelMerge").setMaster("local")
     val sc = new SparkContext(conf)
 
-    val fileName = "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF100_4"
+    val fileName = "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\MF\\cv\\MF_cv_ndcg.txt"
     val input = sc.textFile(fileName).map{x=>
       val info = x.split("\t")
       val random = scala.util.Random.nextDouble()
-      (info(0),info(1),info(2).toDouble,info(3).toDouble.toInt)
+      val label = if (info(3).toInt == -1){0} else{1}
+      (info(0),info(1),info(2).toDouble,label)
     }
     val ndcg = NDCG(input)
     println(ndcg)

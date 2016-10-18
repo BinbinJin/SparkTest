@@ -20,8 +20,12 @@ object RF {
   def main(args:Array[String]): Unit ={
     val conf = new SparkConf().setAppName("RF").setMaster("local[3]")
     val sc = new SparkContext(conf)
-    val dataName = "answerRate_des_intersection_dis_preferDis_hot_RF"
-    train(sc,dataName,63)
+    val dataName = "qid_uid"
+//    train(sc,dataName,63)
+    val numTrees = 240
+    val maxDepth = 12
+    val (pre,ndcg) = localTest(sc,dataName,numTrees,maxDepth)
+    println(pre+"\t"+ndcg)
   }
   def train(sc:SparkContext,inputName:String,modelNum:Int): Unit ={
     val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
@@ -58,15 +62,15 @@ object RF {
     }).cache()
 
     /*预测*/
-//    prediction(training,test,240,12)
-    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\"+inputName+"_ndcg4.txt")
-    for (numTrees <- Range(210,211,10))
-      for (maxDepth <- Range(16,17,1)){
-        val (pre,ndcg) = localTest(training,numTrees,maxDepth)
-        out.println(numTrees+" "+maxDepth+" "+pre+" "+ndcg)
-//        prediction(training,test,numTrees,maxDepth)
-      }
-    out.close()
+    prediction(training,test,240,12)
+//    val out = new PrintWriter("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF\\"+inputName+"_ndcg4.txt")
+//    for (numTrees <- Range(210,211,10))
+//      for (maxDepth <- Range(16,17,1)){
+//        val (pre,ndcg) = localTest(training,numTrees,maxDepth)
+//        out.println(numTrees+" "+maxDepth+" "+pre+" "+ndcg)
+////        prediction(training,test,numTrees,maxDepth)
+//      }
+//    out.close()
 
 //    val (pre,ndcg) = localTest(training,200,5)
 //    println(pre+" "+ndcg)
@@ -88,26 +92,57 @@ object RF {
     }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF_"+numTrees+"_"+maxDepth +"_sub")
   }
 
-  def localTest(data:RDD[(String,String,LabeledPoint)],numTrees:Int,maxDepth:Int): (Double,Double) ={
-    val splits = data.randomSplit(Array(0.9, 0.1),11L)
-    val (trainingData, testData) = (splits(0), splits(1))
+  def localTest(sc:SparkContext,inputName:String,numTrees:Int,maxDepth:Int): (Double,Double) ={
+    val data = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+inputName+"\\train\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value,question,user)
+    })
+    val featureNum = data.flatMap(x=>x._2).max()+1
+    val train = data.map(x=>LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3))).cache()
+
+    val data2 = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+inputName+"\\test\\part-*").map({x=>
+      val info = x.split("\t")
+      val question = info(0)
+      val user = info(1)
+      val labelAndFeature = info(2).split(" ")
+      val label = labelAndFeature(0).toDouble
+      val indices = new Array[Int](labelAndFeature.length-1)
+      val value = new Array[Double](labelAndFeature.length-1)
+      for (i<-1 until labelAndFeature.length){
+        val indAndVal = labelAndFeature(i).split(":")
+        indices(i-1) = indAndVal(0).toInt-1
+        value(i-1) = indAndVal(1).toDouble
+      }
+      (label,indices,value,question,user)
+    })
+    val validaion = data2.map(x=>(x._4,x._5,LabeledPoint(x._1,Vectors.sparse(featureNum,x._2,x._3)))).cache()
 
     val categoricalFeaturesInfo = mutable.HashMap[Int, Int]()
     val featureSubsetStrategy = "auto" // Let the algorithm choose.
     val impurity = "variance"
     val maxBins = 500
 
-    val model = RandomForest.trainRegressor(trainingData.map(_._3), categoricalFeaturesInfo.toMap,
+    val model = RandomForest.trainRegressor(train, categoricalFeaturesInfo.toMap,
       numTrees, featureSubsetStrategy, impurity, maxDepth, maxBins)
-    val labelsAndPredictions = testData.map { point =>
+    val labelsAndPredictions = validaion.map { point =>
       val prediction = model.predict(point._3.features)
       (point._1,point._2,prediction,point._3.label.toInt)
-    }//.map(x=>x._1+"\t"+x._2+"\t"+x._3+"\t"+x._4).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\RF100_4")
+    }
 
     val ndcg = NDCG.NDCG(labelsAndPredictions)
     val pre = LR.evaluate(labelsAndPredictions)
     (pre,ndcg)
-//    val testMSE = labelsAndPredictions.map{ case(v, p) => math.pow((v - p), 2)}.mean()
-//    out.println(numTrees + " " + maxDepth + " " + testMSE)
+
   }
 }

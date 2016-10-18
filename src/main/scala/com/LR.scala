@@ -48,13 +48,13 @@ object LR {
 
     val dataName = "raw_answerRate6_intersection2_dis163_hot7"
     //dataProcessing(sc,0,dataName)
-    train(sc,dataName,68)
+//    train(sc,dataName,68)
 //    val (pre,ndcg) = train_pred(sc,dataName)
 //    println(pre+" "+ndcg)
 
     //SVMTrain(sc,dataName,27)
     //evaluate(sc,dataName)
-//    statistic(sc)
+    rule(sc)
 
     sc.stop()
   }
@@ -671,7 +671,7 @@ object LR {
 //    println(precision+" "+recall+" "+correct)
   }
 
-  def statistic(sc:SparkContext): Unit ={
+  def rule(sc:SparkContext): Unit ={
     val label = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\invited_info_train.txt").map{x=>
       val info = x.split("\t")
       val qid = info(0)
@@ -687,7 +687,7 @@ object LR {
       ((qid,uid),1.0)
     }
 
-    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\RF_FM.csv").map{x=>
+    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_FM_pp_0.2.csv").map{x=>
       val info = x.split(",")
       val qid = info(0)
       val uid = info(1)
@@ -699,9 +699,9 @@ object LR {
     score.leftOuterJoin(prst).map{x=>
       val qid = x._1._1
       val uid = x._1._2
-      val score = if (x._2._2 == None){x._2._1}else {0.0}
+      val score = if (x._2._2 == None){x._2._1}else {-10}
       qid+","+uid+","+score
-    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\RF_FM_rule")
+    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_FM_pp_0.2_rule2")
 
   }
 }
