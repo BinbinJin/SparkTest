@@ -1,5 +1,7 @@
 package com
 
+import java.io.PrintWriter
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -11,15 +13,33 @@ object NDCG {
     val conf = new SparkConf().setAppName("modelMerge").setMaster("local")
     val sc = new SparkContext(conf)
 
-    val fileName = "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\MF\\cv\\MF_cv_ndcg.txt"
-    val input = sc.textFile(fileName).map{x=>
-      val info = x.split("\t")
-      val random = scala.util.Random.nextDouble()
-      val label = if (info(3).toInt == -1){0} else{1}
-      (info(0),info(1),info(2).toDouble,label)
+//    val fileName = "C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\MF\\cv\\MF_cv_ndcg.txt"
+//    val input = sc.textFile(fileName).map{x=>
+//      val info = x.split("\t")
+//      val random = scala.util.Random.nextDouble()
+//      val label = if (info(3).toInt == -1){0} else{1}
+//      (info(0),info(1),info(2).toDouble,label)
+//    }
+
+    val input1 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\data\\cv\\validation.txt").map{x=>
+      val info = x.split(" ")
+      val target = info(0).toInt
+      val label = if(target==1){1}else{0}
+      val qid = info(4).split(":")(0)
+      val uid = info(5).split(":")(0)
+      (qid,uid,label)
+    }.zipWithIndex().map(_.swap)
+    val out = new PrintWriter("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\compare.txt")
+    for (i<-30 to 100){
+      val input2 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\pred\\pred"+i+".txt").zipWithIndex().map(_.swap)
+      val input =input1.join(input2).map(x=>(x._2._1._1,x._2._1._2,x._2._2.toDouble,x._2._1._3))
+      val ndcg = NDCG(input)
+      out.println(i+":"+ndcg);
+
     }
-    val ndcg = NDCG(input)
-    println(ndcg)
+    out.close()
+    //val ndcg = NDCG(input)
+    //println(ndcg)
   }
 
   def NDCG(data:RDD[(String,String,Double,Int)]): Double ={

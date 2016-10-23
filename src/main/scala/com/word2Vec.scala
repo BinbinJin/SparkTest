@@ -20,7 +20,7 @@ object word2Vec {
   }
   def dataExtract(sc:SparkContext): Unit ={
     val userInfo = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\user_info.txt")
+      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\user_info.txt")
       .map({x=>
         val info = x.split("\t")
         val user = info(0)
@@ -36,7 +36,7 @@ object word2Vec {
       })
 
     val questionInfo = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\question_info.txt")
+      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\question_info.txt")
       .map({x=>
         val info = x.split("\t")
         val question = info(0)
@@ -64,8 +64,8 @@ object word2Vec {
 
     val sentence = user1.union(user2).union(q1).union(q2)
     val word2Vec = new Word2Vec()
-    for (vecSize<-Range(60,100,10)){
-      for (windowSize<-Range(3,7,1)){
+    for (vecSize<-Range(20,50,10)){
+      for (windowSize<-Range(3,6,1)){
         val model = word2Vec.setMinCount(0).setNumIterations(10).setVectorSize(vecSize).setWindowSize(windowSize).fit(sentence)
         model.save(sc,"C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\word2vec\\word2Vec_10_"+vecSize+"_"+windowSize)
       }

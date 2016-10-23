@@ -687,7 +687,7 @@ object LR {
       ((qid,uid),1.0)
     }
 
-    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_FM_pp_0.2.csv").map{x=>
+    val score = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_SVD_0.5_FM_pp_0.8.csv").map{x=>
       val info = x.split(",")
       val qid = info(0)
       val uid = info(1)
@@ -701,7 +701,7 @@ object LR {
       val uid = x._1._2
       val score = if (x._2._2 == None){x._2._1}else {-10}
       qid+","+uid+","+score
-    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_FM_pp_0.2_rule2")
+    }.repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\modelMerge\\MF_SVD_0.5_FM_pp_0.8_rule")
 
   }
 }
