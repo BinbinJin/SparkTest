@@ -21,25 +21,97 @@ object NDCG {
 //      (info(0),info(1),info(2).toDouble,label)
 //    }
 
-    val input1 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\data\\cv\\validation.txt").map{x=>
-      val info = x.split(" ")
-      val target = info(0).toInt
-      val label = if(target==1){1}else{0}
-      val qid = info(4).split(":")(0)
-      val uid = info(5).split(":")(0)
-      (qid,uid,label)
-    }.zipWithIndex().map(_.swap)
-    val out = new PrintWriter("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\compare.txt")
-    for (i<-30 to 100){
-      val input2 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\pred\\pred"+i+".txt").zipWithIndex().map(_.swap)
-      val input =input1.join(input2).map(x=>(x._2._1._1,x._2._1._2,x._2._2.toDouble,x._2._1._3))
-      val ndcg = NDCG(input)
-      out.println(i+":"+ndcg);
-
-    }
-    out.close()
+    val inputName = "0.01_0.05_0.05_0.05_15"
+    //SVDTest(sc,inputName)
+    //SVDPPTest(sc,inputName)
+    RankSVDTest(sc,inputName)
     //val ndcg = NDCG(input)
     //println(ndcg)
+  }
+
+  def SVDTest(sc:SparkContext,inputName:String): Unit ={
+    for (i<-0 until 8){
+      val input1 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\SVD\\SVD\\data\\cv\\validation"+i+".txt").map{x=>
+        val info = x.split(" ")
+        val target = info(0).toInt
+        val label = if(target==2){1}else{0}
+        val uid = info(4).split(":")(0)
+        val qid = info(5).split(":")(0)
+        (qid,uid,label)
+      }.zipWithIndex().map(_.swap).cache()
+      val out = new PrintWriter("E:\\SVD\\"+inputName+"\\compare"+i+".txt")
+      for (j<-141 to 200){
+        val input2 = sc.textFile("E:\\SVD\\"+inputName+"\\pred"+i+"\\pred"+j+".txt").zipWithIndex().map(_.swap)
+        val input =input1.join(input2).map(x=>(x._2._1._1,x._2._1._2,x._2._2.toDouble,x._2._1._3))
+        val ndcg = NDCG(input)
+        out.println(j+":"+ndcg)
+      }
+      out.close()
+      input1.unpersist()
+    }
+    merge(sc,inputName,"SVD")
+  }
+
+  def SVDPPTest(sc:SparkContext,inputName:String){
+    for (i<-0 until 8){
+      val input1 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\SVD++\\SVD++\\data\\cv\\validation"+i+".txt").map{x=>
+        val info = x.split(" ")
+        val target = info(0).toDouble.toInt
+        val label = if(target==3 || target==4){1}else{0}
+        val uid = info(4).split(":")(0)
+        val qid = info(5).split(":")(0)
+        (qid,uid,label)
+      }.zipWithIndex().map(_.swap).cache()
+      val out = new PrintWriter("E:\\SVD++\\"+inputName+"\\compare"+i+".txt")
+      for (j<-1 to 100){
+        val input2 = sc.textFile("E:\\SVD++\\"+inputName+"\\pred"+i+"\\pred"+j+".txt").zipWithIndex().map(_.swap)
+        val input =input1.join(input2).map(x=>(x._2._1._1,x._2._1._2,x._2._2.toDouble,x._2._1._3))
+        val ndcg = NDCG(input)
+        out.println(j+":"+ndcg)
+      }
+      out.close()
+      input1.unpersist()
+    }
+    merge(sc,inputName,"SVD++")
+  }
+
+  def RankSVDTest(sc:SparkContext,inputName:String){
+    for (i<-0 until 8){
+      val input1 = sc.textFile("C:\\Users\\zjcxj\\Documents\\Visual Studio 2015\\Projects\\RankSVD\\RankSVD\\data\\cv\\validation"+i+".txt").map{x=>
+        val info = x.split(" ")
+        val target = info(0).toDouble.toInt
+        val label = if(target==3 || target==4){1}else{0}
+        val uid = info(4).split(":")(0)
+        val qid = info(5).split(":")(0)
+        (qid,uid,label)
+      }.zipWithIndex().map(_.swap).cache()
+      val out = new PrintWriter("E:\\RankSVD\\"+inputName+"\\compare"+i+".txt")
+      for (j<-1 to 100){
+        val input2 = sc.textFile("E:\\RankSVD\\"+inputName+"\\pred"+i+"\\pred"+j+".txt").zipWithIndex().map(_.swap)
+        val input =input1.join(input2).map(x=>(x._2._1._1,x._2._1._2,x._2._2.toDouble,x._2._1._3))
+        val ndcg = NDCG(input)
+        out.println(j+":"+ndcg)
+      }
+      out.close()
+      input1.unpersist()
+    }
+    merge(sc,inputName,"RankSVD")
+  }
+
+  def merge(sc:SparkContext,inputName:String,folder:String): Unit ={
+    val arr = new Array[Array[Double]](8)
+    for (i<-0 until 8){
+      arr(i) = sc.textFile("E:\\"+folder+"\\"+inputName+"\\compare"+i+".txt").map{x=>x.split(":")(1).toDouble}.collect()
+    }
+    val out = new PrintWriter("E:\\"+folder+"\\"+inputName+"\\res.txt")
+    for (i<-0 until arr(0).length){
+      for (j<-1 until 8){
+        arr(0)(i) += arr(j)(i)
+      }
+      arr(0)(i) = arr(0)(i) / 8
+      out.println(arr(0)(i))
+    }
+    out.close()
   }
 
   def NDCG(data:RDD[(String,String,Double,Int)]): Double ={

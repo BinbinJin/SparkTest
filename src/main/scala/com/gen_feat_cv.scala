@@ -23,7 +23,7 @@ object gen_feat_cv {
     //        featExtract(sc,dataName,embedding,5)
     //      }
     //    }
-    val dataName = "qid_uid_bin"
+    val dataName = "qid_uid_bin_svd"
     val embedding = "10_40_3"
     featExtract(sc,dataName,embedding,5)
     //    sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map(x=>x.split(","))
@@ -56,7 +56,7 @@ object gen_feat_cv {
       }).cache()
 
     val invitedInfo = sc
-      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\train.txt")
+      .textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\invited_info_train.txt")
       .map({x=>
         val info = x.split("\t")
         val question = info(0)
@@ -218,7 +218,7 @@ object gen_feat_cv {
       (label, (support, answer, goodAnswer))
     }.reduceByKey((x,y)=>(x._1+y._1,x._2+y._2,x._3+y._3)).collect().toMap
 
-    val train = invitedInfo.map({x=>
+    val train_all = invitedInfo.map({x=>
       val question = x._1
       val user = x._2
       val label = x._3
@@ -267,13 +267,13 @@ object gen_feat_cv {
       (question,user,LabeledPoint(label.toDouble,Vectors.dense(featAll)))
     })
 
-    val testOffline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validation.txt").map({x=>
-      val info = x.split("\t")
-      val question = info(0)
-      val user = info(1)
-      val label = if (info(2).toInt==1) {1} else {-1}
-
-      val idFeat = genIdFeat(question,user,idFeatMap)
+//    val testOffline = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validation.txt").map({x=>
+//      val info = x.split("\t")
+//      val question = info(0)
+//      val user = info(1)
+//      val label = if (info(2).toInt==1) {1} else {-1}
+//
+//      val idFeat = genIdFeat(question,user,idFeatMap)
 //
 //      val qid_uidarr = genCorFeat(question,uidFeatMap,qid_uidArr)
 //      val uid_qidarr = genCorFeat(user,qidFeatMap,uid_qidArr)
@@ -308,37 +308,42 @@ object gen_feat_cv {
 //
 //      val hot = genHotFeat(question,questionInfoMap,sagClassTotal)
 //
-      val featAll = idFeat
-      //      for ((ind,(min,max))<- norm){
-      //        featAll(ind) = (featAll(ind)-min) / (max-min)
-      //      }
-      (question,user,Vectors.dense(featAll),label)
-    })
+//      val featAll = idFeat
+//      //      for ((ind,(min,max))<- norm){
+//      //        featAll(ind) = (featAll(ind)-min) / (max-min)
+//      //      }
+//      (question,user,Vectors.dense(featAll),label)
+//    })
 
     //staDis(train)
 //    pearson(train)
+    val splits = train_all.randomSplit(Array(0.125,0.125,0.125,0.125,0.125,0.125,0.125,0.125),seed = 11L)
+    for (i<-0 until 8){
+      val part = splits(i)
+      part.map(x=>{
+        val qid = x._1
+        val uid = x._2
+        val label = x._3.label
+        val feature = x._3.features.toSparse
+        val indices = feature.indices.map(x=>x+1)
+        val value = feature.values
+        val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
+        qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
+      }).repartition(1).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\part"+i)
+    }
 
-    train.map(x=>{
-      val qid = x._1
-      val uid = x._2
-      val label = x._3.label
-      val feature = x._3.features.toSparse
-      val indices = feature.indices.map(x=>x+1)
-      val value = feature.values
-      val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
-      qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\train")
-    testOffline.map(x=>{
-      val qid = x._1
-      val uid = x._2
-      val feature = x._3.toSparse
-      val label = x._4
-      val indices = feature.indices.map(x=>x+1)
-      val value = feature.values
-      val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
-      qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
-    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\test")
-    println(train.first()._3.features.size)
+
+//    testOffline.map(x=>{
+//      val qid = x._1
+//      val uid = x._2
+//      val feature = x._3.toSparse
+//      val label = x._4
+//      val indices = feature.indices.map(x=>x+1)
+//      val value = feature.values
+//      val feature2 = indices.zip(value).map(x=>x._1+":"+x._2)
+//      qid+"\t"+uid+"\t"+label+" "+feature2.mkString(" ")
+//    }).saveAsTextFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\cv\\libSVM\\"+outName+"\\test")
+//    println(train.first()._3.features.size)
   }
 
   def genLabelFeat(qLabel:Array[Int],uLabel:Array[Int]): Array[Double] ={

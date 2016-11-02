@@ -6,6 +6,7 @@ import org.apache.spark.{SparkConf,SparkContext}
 /**
   * Created by JinBinbin on 2016/8/29.
   */
+//将rankSVD的预测得分与qid，uid对应
 object sparkPi {
   def main(args: Array[String]) {
     val conf = new SparkConf().setAppName("Spark Pi").setMaster("local")
