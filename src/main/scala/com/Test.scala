@@ -25,10 +25,10 @@ object Test {
     //        featExtract(sc,dataName,embedding,5)
     //      }
     //    }
-    val dataName = "qid_uid_rate"
+    val dataName = "qid_uid_1-4"
     val embedding = "10_40_3"
-    //featExtract(sc,dataName,embedding,5)
-    dataTrans_all(sc,dataName)
+    featExtract(sc,dataName,embedding,5)
+    //dataTrans_all(sc,dataName)
     //    sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\data\\validate_nolabel.txt").map(x=>x.split(","))
     //      .map(x=>((x(0),x(1)),1)).reduceByKey(_+_).sortByKey().repartition(1).saveAsTextFile("./haha2")
   }
@@ -73,6 +73,11 @@ object Test {
       })
       .zipWithIndex().saveAsTextFile("C:\\Users\\zjcxj\\IdeaProjects\\svdfeature-1.2.2\\data_RankSVD\\all\\question")
 
+    val userSeq = new Array[Double](28763)
+    for (i<-0 until 28763){
+      userSeq(i) = util.Random.nextDouble()
+    }
+
     val u_q = sc.textFile("C:\\Users\\zjcxj\\Desktop\\2016ByteCup\\libSVM\\qid_uid_bin\\train\\part-*").map({x=>
       val info = x.split("\t")
       val question = info(0)
@@ -106,22 +111,23 @@ object Test {
           case (1,2) => 3
           case (1,1) => 4
         }
-        (target,qid,uid)
+        val qNum = questionMap(qid).toInt
+        val uNum = userMap(uid).toInt
+        val order = userSeq(uNum)
+        (target,qNum,uNum,order)
       }
-      .sortBy(_._3).collect()
+      .sortBy(_._4).map(x=>(x._1,x._2,x._3)).collect()
 
     val trainFile = new PrintWriter("C:\\Users\\zjcxj\\IdeaProjects\\svdfeature-1.2.2\\data_RankSVD\\all\\train.txt")
-    for ((label,question,user)<-train){
-      val row = questionMap(question)
-      val col = userMap(user)
-      trainFile.println(label+" 0 1 1 "+col+":1 "+row+":1")
+    for ((label,qNum,uNum)<-train){
+      trainFile.println(label+" 0 1 1 "+uNum+":1 "+qNum+":1")
     }
     trainFile.close()
     val trainFeedBack = new PrintWriter("C:\\Users\\zjcxj\\IdeaProjects\\svdfeature-1.2.2\\data_RankSVD\\all\\train_feed.txt")
-    var last = userMap(train(0)._3)
+    var last = train(0)._3
     var num = 1
     for (i<-1 until train.length){
-      val row = userMap(train(i)._3)
+      val row = train(i)._3
       if (row == last){
         num += 1
       }else{
@@ -157,21 +163,22 @@ object Test {
       val info = x.split("\t")
       val question = info(0)
       val user = info(1)
-      (question,user)
-    }).sortBy(_._2).collect()
+      val qNum = questionMap(question).toInt
+      val uNum = userMap(user).toInt
+      val order = userSeq(uNum)
+      (qNum,uNum,order)
+    }).sortBy(_._3).map(x=>(x._1,x._2)).collect()
 
     val testFile = new PrintWriter("C:\\Users\\zjcxj\\IdeaProjects\\svdfeature-1.2.2\\data_RankSVD\\all\\test.txt")
-    for ((question,user)<-test){
-      val row = questionMap(question)
-      val col = userMap(user)
-      testFile.println("0 0 1 1 "+col+":1 "+row+":1")
+    for ((qNum,uNum)<-test){
+      testFile.println("0 0 1 1 "+uNum+":1 "+qNum+":1")
     }
     testFile.close()
     val testFeedBack = new PrintWriter("C:\\Users\\zjcxj\\IdeaProjects\\svdfeature-1.2.2\\data_RankSVD\\all\\test_feed.txt")
-    last = userMap(test(0)._2)
+    last = test(0)._2
     num = 1
     for (i<-1 until test.length){
-      val row = userMap(test(i)._2)
+      val row = test(i)._2
       if (row == last){
         num += 1
       }else{
@@ -245,10 +252,10 @@ object Test {
         val qid = x._1._1
         val uid = x._1._2
         val target = (x._2._1,x._2._2) match {
-          case (0,1) => 2
-          case (0,2) => 1
-          case (1,2) => 3
-          case (1,1) => 4
+          case (0,1) => 0
+          case (0,2) => 0
+          case (1,2) => 1
+          case (1,1) => 1
         }
         (qid,uid,target)
       }

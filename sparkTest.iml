@@ -166,5 +166,8 @@
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-mapreduce-client-jobclient:2.6.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-annotations:2.6.0" level="project" />
     <orderEntry type="library" name="scala-sdk-2.10.5" level="application" />
+    <orderEntry type="library" name="RankLib" level="project" />
+    <orderEntry type="library" name="RankLib-2.1-patched" level="project" />
+    <orderEntry type="library" name="RankLib-2.7" level="project" />
   </component>
 </module>
